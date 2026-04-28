@@ -1,0 +1,95 @@
+<#
+.SYNOPSIS
+    Install / uninstall {{APP_NAME}} Start Menu and Desktop shortcuts.
+.DESCRIPTION
+    Creates or removes shortcuts for {{APP_NAME}} in the Start Menu and on the Desktop.
+    Run without arguments to see usage.
+.PARAMETER Action
+    install | uninstall | install_menu | uninstall_menu | install_desktop | uninstall_desktop
+#>
+param(
+    [Parameter(Mandatory=$true, Position=0)]
+    [ValidateSet('install', 'uninstall', 'install_menu', 'uninstall_menu', 'install_desktop', 'uninstall_desktop')]
+    [string]$Action
+)
+
+$ErrorActionPreference = 'Stop'
+
+$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$AppName    = '{{APP_NAME}}'
+$AppExe     = '{{APP_EXEC}}'
+$AppComment = '{{APP_COMMENT}}'
+$AppIcon    = '{{APP_ICON}}'
+
+$StartMenuPath = [Environment]::GetFolderPath('Programs')
+$DesktopPath   = [Environment]::GetFolderPath('Desktop')
+$MenuShortcut    = Join-Path $StartMenuPath "$AppName.lnk"
+$DesktopShortcut = Join-Path $DesktopPath   "$AppName.lnk"
+$TargetPath      = Join-Path $ScriptDir $AppExe
+
+if ($AppIcon -and (Test-Path (Join-Path $ScriptDir $AppIcon))) {
+    $IconPath = Join-Path $ScriptDir $AppIcon
+} else {
+    $IconPath = $TargetPath
+}
+
+function New-AppShortcut {
+    param([string]$Path)
+    $wsh = New-Object -ComObject WScript.Shell
+    $sc  = $wsh.CreateShortcut($Path)
+    $sc.TargetPath       = $TargetPath
+    $sc.WorkingDirectory = $ScriptDir
+    $sc.IconLocation     = $IconPath
+    $sc.Description      = $AppComment
+    $sc.Save()
+    Write-Host "  Created: $Path"
+}
+
+function Remove-AppShortcut {
+    param([string]$Path)
+    if (Test-Path $Path) {
+        Remove-Item -LiteralPath $Path -Force
+        Write-Host "  Removed: $Path"
+    }
+}
+
+function Install-Menu {
+    Write-Host "[menu] $AppName ..."
+    New-AppShortcut $MenuShortcut
+    Write-Host "[menu] Done."
+}
+
+function Uninstall-Menu {
+    Write-Host "[menu] $AppName ..."
+    Remove-AppShortcut $MenuShortcut
+    Write-Host "[menu] Done."
+}
+
+function Install-Desktop {
+    Write-Host "[desktop] $AppName ..."
+    New-AppShortcut $DesktopShortcut
+    Write-Host "[desktop] Done."
+}
+
+function Uninstall-Desktop {
+    Write-Host "[desktop] $AppName ..."
+    Remove-AppShortcut $DesktopShortcut
+    Write-Host "[desktop] Done."
+}
+
+switch ($Action) {
+    'install' {
+        Install-Menu
+        Install-Desktop
+        Write-Host "[install] Done. $AppName has been added to the Start Menu and Desktop."
+    }
+    'uninstall' {
+        Uninstall-Menu
+        Uninstall-Desktop
+        Write-Host "[uninstall] Done. $AppName has been removed."
+    }
+    'install_menu'    { Install-Menu }
+    'uninstall_menu'  { Uninstall-Menu }
+    'install_desktop'   { Install-Desktop }
+    'uninstall_desktop' { Uninstall-Desktop }
+}

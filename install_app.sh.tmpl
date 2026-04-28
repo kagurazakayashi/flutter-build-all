@@ -1,0 +1,109 @@
+#!/bin/sh
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+APP_NAME="{{APP_NAME}}"
+APP_EXEC="{{APP_EXEC}}"
+APP_ICON="{{APP_ICON_FILE}}"
+APP_ICON_NAME="{{APP_ICON_NAME}}"
+APP_COMMENT="{{APP_COMMENT}}"
+APP_GENERIC_NAME="{{APP_GENERIC_NAME}}"
+APP_CATEGORIES="{{APP_CATEGORIES}}"
+
+MENU_DESKTOP="$HOME/.local/share/applications/{{APP_DESKTOP_NAME}}.desktop"
+ICON_DIR="$HOME/.local/share/icons"
+
+if command -v xdg-user-dir >/dev/null 2>&1; then
+    DESKTOP_DIR="$(xdg-user-dir DESKTOP 2>/dev/null || echo "$HOME/Desktop")"
+else
+    DESKTOP_DIR="$HOME/Desktop"
+fi
+DESKTOP_ICON="$DESKTOP_DIR/{{APP_DESKTOP_NAME}}.desktop"
+
+_desktop_entry() {
+    cat << EOF
+[Desktop Entry]
+Type=Application
+Name=$APP_NAME
+GenericName=$APP_GENERIC_NAME
+Comment=$APP_COMMENT
+Exec="$SCRIPT_DIR/$APP_EXEC"
+Icon=$APP_ICON_NAME
+Terminal=false
+Categories=$APP_CATEGORIES
+EOF
+}
+
+install_icon() {
+    if [ -f "$SCRIPT_DIR/$APP_ICON" ]; then
+        mkdir -p "$ICON_DIR"
+        cp "$SCRIPT_DIR/$APP_ICON" "$ICON_DIR/$APP_ICON_NAME.png"
+    fi
+}
+
+install_menu() {
+    echo "[menu] $APP_NAME ..."
+    mkdir -p "$(dirname "$MENU_DESKTOP")"
+    _desktop_entry > "$MENU_DESKTOP"
+    command -v update-desktop-database >/dev/null 2>&1 \
+        && update-desktop-database "$HOME/.local/share/applications/" 2>/dev/null || true
+    echo "[menu] Done."
+}
+
+install_desktop() {
+    echo "[desktop] $APP_NAME ..."
+    mkdir -p "$DESKTOP_DIR"
+    _desktop_entry > "$DESKTOP_ICON"
+    chmod +x "$DESKTOP_ICON" 2>/dev/null || true
+    echo "[desktop] Done."
+}
+
+install() {
+    install_icon
+    install_menu
+    install_desktop
+    echo "[install] Done. $APP_NAME has been added to the application menu and desktop."
+}
+
+uninstall_menu() {
+    echo "[menu] $APP_NAME ..."
+    rm -f "$MENU_DESKTOP"
+    command -v update-desktop-database >/dev/null 2>&1 \
+        && update-desktop-database "$HOME/.local/share/applications/" 2>/dev/null || true
+    echo "[menu] Done."
+}
+
+uninstall_desktop() {
+    echo "[desktop] $APP_NAME ..."
+    rm -f "$DESKTOP_ICON"
+    echo "[desktop] Done."
+}
+
+uninstall() {
+    rm -f "$MENU_DESKTOP"
+    rm -f "$DESKTOP_ICON"
+    rm -f "$ICON_DIR/$APP_ICON_NAME.png"
+    command -v update-desktop-database >/dev/null 2>&1 \
+        && update-desktop-database "$HOME/.local/share/applications/" 2>/dev/null || true
+    echo "[uninstall] Done. $APP_NAME has been removed."
+}
+
+case "${1:-}" in
+    install)          install ;;
+    uninstall)        uninstall ;;
+    install_menu)     install_icon && install_menu ;;
+    uninstall_menu)   uninstall_menu ;;
+    install_desktop)  install_desktop ;;
+    uninstall_desktop) uninstall_desktop ;;
+    *)
+        echo "Usage: $0 {install|uninstall|install_menu|uninstall_menu|install_desktop|uninstall_desktop}"
+        echo "  install           - Add to menu and desktop"
+        echo "  uninstall         - Remove from menu and desktop"
+        echo "  install_menu      - Add to menu only"
+        echo "  uninstall_menu    - Remove from menu only"
+        echo "  install_desktop   - Add desktop shortcut only"
+        echo "  uninstall_desktop - Remove desktop shortcut only"
+        exit 1
+        ;;
+esac
