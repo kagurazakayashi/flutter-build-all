@@ -1,139 +1,210 @@
-# flutter-build-all — Flutter 全プラットフォームビルドスクリプト
+# flutter-build-all — Flutter 全プラットフォームビルドツール
 
 [English](README.md) | [简体中文](README.zh-Hans.md) | [繁體中文](README.zh-Hant.md) | **日本語**
 
-Flutter プロジェクトのルートに配置するスタンドアロン Python 3 スクリプト（`build_all.py`）です。実行すると、全サポートプラットフォーム向けにプロジェクトを一括ビルドし、リソースファイルとインストールスクリプトを自動的にバンドルします。
+Dart CLI ツールです。Flutter プロジェクトのルートに配置（または Git サブモジュールとして使用）し、全サポートプラットフォーム向けのビルドをワンコマンドで実行します。リソースファイルとインストールスクリプトも自動的にバンドルされます。
 
-## 目次
+## 必要条件
 
-- [概要](#概要)
-- [サードパーティライブラリ](#サードパーティライブラリ)
-- [導入方法](#導入方法)
-  - [方法1：ファイルのコピー](#方法1ファイルのコピー)
-  - [方法2：Git サブモジュール](#方法2git-サブモジュール)
-- [使用方法](#使用方法)
-  - [クイックスタート](#クイックスタート)
-  - [プラットフォームフィルター](#プラットフォームフィルター)
-  - [Web レンダラー](#web-レンダラー)
-- [オプション一覧](#オプション一覧)
-- [ビルドプロセス](#ビルドプロセス)
-- [出力ディレクトリ構造](#出力ディレクトリ構造)
-- [注意事項](#注意事項)
+- **Dart SDK** 3.4+
+- **Flutter SDK**（任意の安定版）
 
-## 概要
+Python や pip 依存は不要です。YAML 解析と Markdown 変換は Dart の組み込みパッケージで処理され、初回 `dart run` 時に自動取得されます。
 
-- `pubspec.yaml` からアプリ名とバージョンを読み取り
-- 利用可能な全 Flutter プラットフォームを列挙（`windows`、`linux`、`macos`、`web`、`android`、`ios`）
-- `l10n/app_*.arb` ファイルを自動検出し、ビルド前に `flutter gen-l10n` を実行
-- ビルド前に `flutter analyze` で静的解析を実行
-- README ファイル（Markdown → HTML 変換、オプションのサードパーティライブラリ）と LICENSE を各出力にバンドル
-- **Linux**：`install_app.sh` を生成（デスクトップショートカット・`.desktop` メニュー管理）
-- **Windows**：`install_app.ps1` を生成（スタートメニュー・デスクトップショートカット管理）
-- **macOS**：`install_app.sh` を生成（`.app` を `/Applications` にインストール）
-- **並列ビルド**：`--jobs` で複数プラットフォームを同時ビルド
+## クイックスタート
 
-## サードパーティライブラリ
-
-| ライブラリ     | 目的                                                     | インストール方法         | 必須？                                      |
-| -------------- | -------------------------------------------------------- | ------------------------ | ------------------------------------------- |
-| `pyyaml`       | `pubspec.yaml` の解析                                    | `pip install pyyaml`     | いいえ。正規表現によるフォールバックあり    |
-| `markdown`     | README.md を HTML に変換                                 | `pip install markdown`   | いいえ。未インストール時は `.txt` で出力    |
-
-## 導入方法
-
-### 方法1：ファイルのコピー
-
-```
-your-project/
-├── build_all.py          # メインスクリプト（必須）
-├── install_app.sh.tmpl   # Linux インストールスクリプトテンプレート
-├── install_app.ps1.tmpl  # Windows インストールスクリプトテンプレート
-└── Info.plist.tmpl       # macOS App Bundle テンプレート（予約）
-```
-
-### 方法2：Git サブモジュール
-
-```bash
-git submodule add git@github.com:kagurazakayashi/flutter-build-all.git tools/build-all
-git submodule update --init --recursive
-```
-
-## 使用方法
-
-### クイックスタート
+### 方法1：Git サブモジュール（推奨）
 
 ```bash
 cd /path/to/your-flutter-project
-python build_all.py
+git submodule add git@github.com:kagurazakayashi/flutter-build-all.git flutter-build-all
+git submodule update --init --recursive
 ```
 
-### プラットフォームフィルター
+プロジェクトルートから実行：
 
 ```bash
-python build_all.py --target "windows,linux"
-python build_all.py --no-web
+dart flutter-build-all/bin/build_all.dart
 ```
 
-### Web レンダラー
+ラッパースクリプトも作成できます（例：`build-all.bat` / `build-all.sh`）：
+
+```batch
+:: build-all.bat
+@ECHO OFF
+CALL dart "flutter-build-all\bin\build_all.dart" %*
+```
+
+### おまけ：スタンドアロン実行ファイルにコンパイル
 
 ```bash
-python build_all.py --target "web" --web-renderer canvaskit
+dart compile exe flutter-build-all/bin/build_all.dart -o build-all.exe
+```
+
+コンパイル後は Dart SDK 不要：
+
+```bash
+./build-all --target "windows,web"
+```
+
+### 方法2：ファイルコピー
+
+リポジトリ全体をプロジェクトのサブディレクトリにコピーし、プロジェクトルートから実行：
+
+```bash
+dart tools/build-all/bin/build_all.dart
+```
+
+> テンプレートファイル（`.tmpl`）は `build_all.dart` と同じパッケージディレクトリに配置する必要があります。ツールは自身のスクリプトパスからテンプレートを検索します。
+
+## 使用例
+
+### 環境チェック
+
+```bash
+dart flutter-build-all/bin/build_all.dart --test
+```
+
+Dart / Flutter のバージョン、現在の OS でビルド可能なプラットフォーム、pubspec.yaml の解析結果を表示します（ビルドは実行しません）。
+
+### 特定プラットフォームのビルド
+
+```bash
+# Windows のみ
+dart flutter-build-all/bin/build_all.dart --target "windows"
+
+# Windows と Web
+dart flutter-build-all/bin/build_all.dart --target "windows,web"
+
+# デスクトップのみ（Web とモバイルをスキップ）
+dart flutter-build-all/bin/build_all.dart --target "windows,linux,macos"
+
+# Web をスキップ
+dart flutter-build-all/bin/build_all.dart --no-web
+```
+
+### 静的解析をスキップ（高速ビルド）
+
+```bash
+dart flutter-build-all/bin/build_all.dart --skip-analyze --target "windows"
 ```
 
 ### 並列ビルド
 
 ```bash
-python build_all.py --jobs 0
+# CPU コア数に応じて自動並列化
+dart flutter-build-all/bin/build_all.dart --jobs 0
+
+# 4 並列
+dart flutter-build-all/bin/build_all.dart --jobs 4
+
+# 並列 + プラットフォームフィルター
+dart flutter-build-all/bin/build_all.dart --jobs 4 --target "linux,web"
 ```
+
+### アプリ情報のカスタマイズ
+
+```bash
+dart flutter-build-all/bin/build_all.dart \
+  --name "MyApp" \
+  --appver "2.0.0" \
+  --appdesc "A powerful Flutter application" \
+  --appicon "assets/icon.png" \
+  --appcategory "Network;FileTransfer"
+```
+
+### Web レンダラー
+
+```bash
+dart flutter-build-all/bin/build_all.dart --target "web" --web-renderer canvaskit
+```
+
+オプション：`auto`（デフォルト）、`canvaskit`、`html`
 
 ## オプション一覧
 
-### 基本オプション
+### 基本
 
-| オプション       | 型     | デフォルト               | 説明                                   |
-| ---------------- | ------ | ------------------------ | -------------------------------------- |
-| `--test`         | フラグ | —                        | 環境チェックのみ（ビルドなし）         |
-| `--name`         | 文字列 | `pubspec.yaml` から自動  | 出力ディレクトリ名                     |
-| `--target`       | 文字列 | —（全プラットフォーム）  | カンマ区切りプラットフォームフィルター |
-| `--appver`       | 文字列 | 自動検出                 | アプリバージョン                       |
-| `--web-renderer` | 文字列 | `auto`                   | Web レンダラー                         |
-| `--no-web`       | フラグ | —                        | Web ビルドをスキップ                   |
-| `--skip-analyze` | フラグ | —                        | `flutter analyze` をスキップ           |
-| `--jobs`         | 整数   | —（シーケンシャル）      | 並列ビルドジョブ数                     |
+| オプション | 型 | デフォルト | 説明 |
+|-----------|------|---------|------|
+| `--test` | フラグ | — | 環境チェックのみ |
+| `--name` | 文字列 | pubspec.yaml から自動 | 出力ディレクトリ名 |
+| `--target` | 文字列 | 全利用可能 | カンマ区切りプラットフォーム、例 `"windows,linux,web"` |
+| `--appver` | 文字列 | pubspec.yaml から自動 | アプリバージョン |
+| `--web-renderer` | 文字列 | `auto` | Web レンダラー：`auto` / `canvaskit` / `html` |
+| `--no-web` | フラグ | — | Web をスキップ |
+| `--skip-analyze` | フラグ | — | `flutter analyze` をスキップ |
+| `--jobs` | 整数 | シーケンシャル | 並列ジョブ数。`0` = CPU コア数自動 |
+
+### アプリ情報
+
+| オプション | 型 | デフォルト | 説明 |
+|-----------|------|---------|------|
+| `--appdesc` | 文字列 | 空 | アプリ説明 |
+| `--appgeneric` | 文字列 | 空 | 一般名 |
+| `--appcategory` | 文字列 | `Utility` | Linux デスクトップカテゴリ（セミコロン区切り） |
+| `--appicon` | 文字列 | `web/icons/Icon-192.png` | アイコンファイルのパス |
+| `--appidentifier` | 文字列 | 自動導出 | macOS Bundle Identifier |
+| `--appmacoscategory` | 文字列 | `public.app-category.utilities` | macOS アプリカテゴリ |
+
+### パス
+
+| オプション | 型 | デフォルト | 説明 |
+|-----------|------|---------|------|
+| `--project-dir` | 文字列 | カレント | Flutter プロジェクトルート |
 
 ## ビルドプロセス
 
-1. プロジェクトチェック（`pubspec.yaml`）
-2. ローカライゼーション生成（`flutter gen-l10n`）
-3. 静的解析（`flutter analyze`）
-4. プロジェクト情報の読み取り
-5. 利用可能プラットフォームの列挙
-6. リソースファイルの検索
-7. プラットフォームごとのビルド
-8. 後処理（ビルド成果物・リソース・スクリプトのコピー）
+1. `pubspec.yaml` からアプリ名とバージョンを読み取り
+2. `lib/l10n/app_*.arb` を検出し、存在すれば `flutter gen-l10n` を実行
+3. `flutter analyze` を実行（`--skip-analyze` でスキップ可）
+4. 現在の OS に基づいてビルド可能なプラットフォームを列挙
+5. プロジェクトルートの README と LICENSE を検索
+6. 各プラットフォームで `flutter build` を実行（`--jobs` で並列化）
+7. ビルド成果物、リソース、インストールスクリプトを `bin/` にコピー
 
-## 出力ディレクトリ構造
+## 出力構造
 
 ```
 bin/
 ├── myapp_v2.0.0_windows/
+│   ├── myapp.exe
+│   ├── data/
+│   ├── flutter_windows.dll
+│   ├── README.html
+│   ├── LICENSE.txt
+│   ├── install_app.ps1
+│   └── app_icon.ico
 ├── myapp_v2.0.0_linux/
-├── myapp_v2.0.0_macos/
 ├── myapp_v2.0.0_web/
-├── myapp_v2.0.0_android/
 └── ...
 ```
 
+命名規則：`{name}_v{ver}_{platform}`（バージョンあり）または `{name}_{platform}`。
+
+## プラットフォーム固有
+
+- **Windows** — `ico/` や `windows/runner/resources/` からアイコンを自動検出；`install_app.ps1` を生成（UTF-8-BOM + CRLF）
+- **Linux** — `install_app.sh` を生成、`install` / `uninstall` / `install_menu` / `install_desktop` サブコマンド対応
+- **macOS** — Flutter が `.app` バンドルを自動生成；さらに `/Applications` へのコピー用 `install_app.sh` を生成
+
 ## 注意事項
 
-- Flutter プロジェクトルート（`pubspec.yaml` がある場所）で実行する必要があります
-- Python 3.6 以降が必要です
-- 全プラットフォームが全 OS でビルドできるわけではありません（例：iOS は macOS が必要）
-- `bin/` ディレクトリは毎回クリアされます
+- Flutter プロジェクトルート（`pubspec.yaml` がある場所）で実行してください（または `--project-dir` を指定）
+- すべてのプラットフォームがすべての OS でビルドできるわけではありません（例：iOS は macOS が必要）
+- `bin/` ディレクトリは実行のたびにクリアされます
+- `--test` は環境チェックのみで、ビルドは実行しません
 
 ## ライセンス
 
 ```LICENSE
 Copyright (c) 2026 KagurazakaYashi
 flutter-build-all is licensed under Mulan PSL v2.
+You can use this software according to the terms and conditions of the Mulan PSL v2.
+You may obtain a copy of Mulan PSL v2 at:
+         http://license.coscl.org.cn/MulanPSL2
+THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+See the Mulan PSL v2 for more details.
 ```

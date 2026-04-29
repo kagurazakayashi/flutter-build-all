@@ -2,179 +2,209 @@
 
 [English](README.md) | [简体中文](README.zh-Hans.md) | **繁體中文** | [日本語](README.ja.md)
 
-一個獨立的 Python 3 腳本（`build_all.py`），放在 Flutter 專案根目錄下執行，即可一鍵建置該 Flutter 專案到所有支援的平台，並自動附帶資源檔案與安裝腳本。
+一個 Dart CLI 工具，放在 Flutter 專案根目錄或作為 Git 子模組使用，一鍵建置到所有支援的平台，並自動附帶資源檔案與安裝腳本。
 
-## 目錄
+## 環境要求
 
-- [功能概覽](#功能概覽)
-- [第三方庫](#第三方庫)
-- [引入方式](#引入方式)
-  - [方式一：複製檔案](#方式一複製檔案)
-  - [方式二：Git 子模組](#方式二git-子模組)
-- [使用方法](#使用方法)
-  - [快速開始](#快速開始)
-  - [按平台過濾建置](#按平台過濾建置)
-  - [Web 渲染器](#web-渲染器)
-- [參數詳解](#參數詳解)
-- [建置流程](#建置流程)
-- [輸出目錄結構](#輸出目錄結構)
-- [注意事項](#注意事項)
+- **Dart SDK** 3.4+
+- **Flutter SDK**（任意穩定版本）
 
-## 功能概覽
+無需額外安裝 Python 或 pip 依賴。YAML 解析和 Markdown 轉換均為 Dart 內建套件，首次 `dart run` 時自動獲取。
 
-- 讀取 `pubspec.yaml` 取得應用名稱與版本號
-- 枚舉所有可用的 Flutter 平台（`windows`、`linux`、`macos`、`web`、`android`、`ios`）
-- 自動檢測 `l10n/app_*.arb` 檔案，建置前執行 `flutter gen-l10n`
-- 建置前執行 `flutter analyze` 進行靜態檢查
-- 將 README 檔案（支援 Markdown 轉 HTML，可選的第三方庫）和 LICENSE 檔案一併打包
-- **Linux**：生成 `install_app.sh`，支援建立/移除桌面捷徑與 `.desktop` 選單項目
-- **Windows**：生成 `install_app.ps1`，支援建立/移除開始選單和桌面捷徑
-- **macOS**：生成 `install_app.sh`，用於將 `.app` 安裝到 `/Applications`
-- **平行建置**：使用 `--jobs` 參數可平行建置多個平台
+## 快速開始
 
-## 第三方庫
-
-| 庫            | 用途                                                       | 安裝方法                 | 是否必須                                      |
-| ------------- | ---------------------------------------------------------- | ------------------------ | --------------------------------------------- |
-| `pyyaml`      | 解析 `pubspec.yaml` 以讀取應用名稱和版本號                 | `pip install pyyaml`     | 否。未安裝時使用正規表示式回退方案            |
-| `markdown`    | 將 README.md 轉換為 HTML 並隨建置輸出一併打包               | `pip install markdown`   | 否。未安裝時 README 以純文字 `.txt` 形式輸出  |
-
-## 引入方式
-
-### 方式一：複製檔案
-
-將本倉庫中的以下檔案複製到你的 Flutter 專案根目錄：
-
-```
-你的專案/
-├── build_all.py          # 主腳本（必需）
-├── install_app.sh.tmpl   # Linux 安裝腳本範本
-├── install_app.ps1.tmpl  # Windows 安裝腳本範本
-└── Info.plist.tmpl       # macOS App Bundle 範本（預留）
-```
-
-如果不需要某個平台的打包功能，對應的範本檔案可以省略。
-
-### 方式二：Git 子模組
+### 方式一：Git 子模組（推薦）
 
 ```bash
-# 在你的 Flutter 專案根目錄下執行
-git submodule add git@github.com:kagurazakayashi/flutter-build-all.git tools/build-all
+cd /path/to/your-flutter-project
+git submodule add git@github.com:kagurazakayashi/flutter-build-all.git flutter-build-all
 git submodule update --init --recursive
 ```
 
-子模組引入後，使用時需要指定 `--project-dir` 參數（或在專案目錄中直接呼叫子模組中的腳本）：
+之後在專案根目錄執行：
 
 ```bash
-# 在專案根目錄執行
-python tools/build-all/build_all.py
-
-# 或在任意目錄執行
-python tools/build-all/build_all.py --project-dir /path/to/your-flutter-project
+dart flutter-build-all/bin/build_all.dart
 ```
 
-## 使用方法
+也可建立捷徑腳本 `build-all.bat`（Windows）或 `build-all.sh`（Linux/macOS）：
 
-### 快速開始
+```batch
+:: build-all.bat
+@ECHO OFF
+CALL dart "flutter-build-all\bin\build_all.dart" %*
+```
+
+### 方式一之：編譯為獨立可執行檔
 
 ```bash
-cd /path/to/你的Flutter專案
-python build_all.py
+dart compile exe flutter-build-all/bin/build_all.dart -o build-all.exe
 ```
 
-輸出將存放在 `bin/` 目錄下，每個平台一個子目錄。
+編譯後無需 Dart SDK，直接執行：
 
-### 按平台過濾建置
+```bash
+./build-all --target "windows,web"
+```
+
+### 方式二：直接複製檔案
+
+將整個倉庫複製到專案中的子目錄，然後在專案根目錄執行：
+
+```bash
+dart tools/build-all/bin/build_all.dart
+```
+
+> 範本檔案（`.tmpl`）必須與 `build_all.dart` 保持在同一套件目錄下，工具透過腳本自身路徑查找範本。
+
+## 使用範例
+
+### 環境檢測
+
+```bash
+dart flutter-build-all/bin/build_all.dart --test
+```
+
+檢查 Dart / Flutter 版本、當前 OS 可建置的平台、pubspec.yaml 解析結果，不執行任何建置。
+
+### 建置指定平台
 
 ```bash
 # 僅建置 Windows
-python build_all.py --target "windows"
+dart flutter-build-all/bin/build_all.dart --target "windows"
 
-# 僅建置 Windows 和 Linux
-python build_all.py --target "windows,linux"
+# 建置 Windows 和 Web
+dart flutter-build-all/bin/build_all.dart --target "windows,web"
 
-# 跳過 Web 建置
-python build_all.py --no-web
+# 建置桌面端（跳過 Web 和行動端）
+dart flutter-build-all/bin/build_all.dart --target "windows,linux,macos"
+
+# 跳過 Web
+dart flutter-build-all/bin/build_all.dart --no-web
 ```
 
-### Web 渲染器
+### 跳過靜態分析（快速建置）
 
 ```bash
-python build_all.py --target "web" --web-renderer canvaskit
+dart flutter-build-all/bin/build_all.dart --skip-analyze --target "windows"
 ```
 
 ### 平行建置
 
 ```bash
-python build_all.py --jobs 0
+# 自動按 CPU 核心數平行
+dart flutter-build-all/bin/build_all.dart --jobs 0
+
+# 指定 4 個平行任務
+dart flutter-build-all/bin/build_all.dart --jobs 4
+
+# 平行 + 平台過濾
+dart flutter-build-all/bin/build_all.dart --jobs 4 --target "linux,web"
 ```
 
-## 參數詳解
+### 自訂應用資訊
+
+```bash
+dart flutter-build-all/bin/build_all.dart \
+  --name "MyApp" \
+  --appver "2.0.0" \
+  --appdesc "A powerful Flutter application" \
+  --appicon "assets/icon.png" \
+  --appcategory "Network;FileTransfer"
+```
+
+### Web 渲染器
+
+```bash
+dart flutter-build-all/bin/build_all.dart --target "web" --web-renderer canvaskit
+```
+
+可選值：`auto`（預設）、`canvaskit`、`html`
+
+## 參數一覽
 
 ### 基礎參數
 
-| 參數             | 類型    | 預設值                 | 說明                                                        |
-| ---------------- | ------- | ---------------------- | ----------------------------------------------------------- |
-| `--test`         | 旗標    | 無                     | 檢查建置環境，不執行實際建置                                |
-| `--name`         | 字串    | 從 `pubspec.yaml` 取得 | 自訂輸出目錄名稱                                            |
-| `--target`       | 字串    | 無（全部平台）         | 逗號分隔的平台過濾清單，例如 `"windows,linux,web"`          |
-| `--appver`       | 字串    | 自動檢測               | 應用版本號                                                  |
-| `--web-renderer` | 字串    | `auto`                 | Web 渲染器：`auto`、`canvaskit` 或 `html`                   |
-| `--no-web`       | 旗標    | 無                     | 跳過 Web 平台建置                                           |
-| `--skip-analyze` | 旗標    | 無                     | 跳過 `flutter analyze` 步驟                                 |
-| `--jobs`         | 整數    | 無（序列）             | 平行建置任務數                                              |
+| 參數 | 類型 | 預設值 | 說明 |
+|------|------|--------|------|
+| `--test` | 旗標 | — | 僅檢測環境，不建置 |
+| `--name` | 字串 | 自動讀取 pubspec.yaml | 自訂輸出目錄名稱 |
+| `--target` | 字串 | 全部可用平台 | 逗號分隔的平台清單，如 `"windows,linux,web"` |
+| `--appver` | 字串 | 自動讀取 pubspec.yaml | 應用版本號，影響輸出目錄命名 |
+| `--web-renderer` | 字串 | `auto` | Web 渲染器：`auto` / `canvaskit` / `html` |
+| `--no-web` | 旗標 | — | 跳過 Web 平台 |
+| `--skip-analyze` | 旗標 | — | 跳過 `flutter analyze` |
+| `--jobs` | 整數 | 序列 | 平行任務數。`0` = 自動按 CPU 核心數 |
 
 ### 應用資訊參數
 
-| 參數                 | 類型   | 預設值                          | 說明               |
-| -------------------- | ------ | ------------------------------- | ------------------ |
-| `--appdesc`          | 字串   | 空                              | 應用描述           |
-| `--appgeneric`       | 字串   | 空                              | 應用通用名稱       |
-| `--appcategory`      | 字串   | `Utility`                       | Linux 桌面分類     |
-| `--appicon`          | 字串   | `web/icons/Icon-192.png`        | 圖示檔案路徑       |
-| `--appidentifier`    | 字串   | 從 app name 推導                | macOS Bundle ID    |
-| `--appmacoscategory` | 字串   | `public.app-category.utilities` | macOS 應用分類     |
+| 參數 | 類型 | 預設值 | 說明 |
+|------|------|--------|------|
+| `--appdesc` | 字串 | 空 | 應用描述 |
+| `--appgeneric` | 字串 | 空 | 通用名稱 |
+| `--appcategory` | 字串 | `Utility` | Linux 桌面分類，多個用分號分隔 |
+| `--appicon` | 字串 | `web/icons/Icon-192.png` | 圖示路徑 |
+| `--appidentifier` | 字串 | 自動推導 | macOS Bundle Identifier |
+| `--appmacoscategory` | 字串 | `public.app-category.utilities` | macOS 應用分類 |
 
 ### 路徑參數
 
-| 參數            | 類型   | 預設值   | 說明                       |
-| --------------- | ------ | -------- | -------------------------- |
-| `--project-dir` | 字串   | 當前目錄 | 指定 Flutter 專案根目錄    |
+| 參數 | 類型 | 預設值 | 說明 |
+|------|------|--------|------|
+| `--project-dir` | 字串 | 當前目錄 | 指定 Flutter 專案根目錄 |
 
 ## 建置流程
 
-1. **專案檢查** — 驗證 `pubspec.yaml` 存在並讀取 `name` 欄位
-2. **本地化生成** — 檢測 `l10n/app_*.arb`，若存在則執行 `flutter gen-l10n`
-3. **靜態檢查** — 執行 `flutter analyze`
-4. **讀取專案資訊** — 從 `pubspec.yaml` 讀取應用名稱和版本號
-5. **枚舉平台** — 根據當前作業系統確定可建置的平台
-6. **查找資源** — 查找專案根目錄下的 README 和 LICENSE 檔案
-7. **逐個建置** — 對每個平台執行 `flutter build`
-8. **後處理** — 將建置產物、資源檔案、安裝腳本複製到 `bin/` 目錄
+1. 讀取 `pubspec.yaml`，獲取應用名稱和版本號
+2. 檢測 `lib/l10n/app_*.arb`，若存在則執行 `flutter gen-l10n`
+3. 執行 `flutter analyze`（可用 `--skip-analyze` 跳過）
+4. 根據當前 OS 枚舉可建置平台
+5. 尋找專案根目錄下的 README 和 LICENSE 檔案
+6. 逐個（或平行）執行 `flutter build`
+7. 將建置產物、資源檔案、安裝腳本複製到 `bin/` 目錄
 
-## 輸出目錄結構
+## 輸出結構
 
 ```
 bin/
 ├── myapp_v2.0.0_windows/
+│   ├── myapp.exe
+│   ├── data/
+│   ├── flutter_windows.dll
+│   ├── README.html
+│   ├── LICENSE.txt
+│   ├── install_app.ps1
+│   └── app_icon.ico
 ├── myapp_v2.0.0_linux/
-├── myapp_v2.0.0_macos/
 ├── myapp_v2.0.0_web/
-├── myapp_v2.0.0_android/
 └── ...
 ```
 
+目錄命名規則：`{name}_v{ver}_{platform}`（有版本號時）或 `{name}_{platform}`。
+
+## 平台特殊處理
+
+- **Windows** — 自動檢測 `ico/`、`windows/runner/resources/` 下的圖示檔案；生成 `install_app.ps1`（UTF-8-BOM + CRLF）
+- **Linux** — 生成 `install_app.sh`，支援 `install` / `uninstall` / `install_menu` / `install_desktop` 子命令
+- **macOS** — Flutter 自動生成 `.app` Bundle；額外生成 `install_app.sh` 用於複製到 `/Applications`
+
 ## 注意事項
 
-- **必須在 Flutter 專案根目錄下執行** — 腳本需要讀取 `pubspec.yaml`
-- **Python 版本** — 需要 Python 3.6 及以上
-- **平台可用性** — 並非所有平台都能在所有作業系統上建置（例如 iOS 需要 macOS）
-- **`pyyaml` 庫是可選的** — 未安裝時使用正規表示式回退解析
-- **輸出覆蓋** — 每次執行會清空 `bin/` 目錄
+- **必須在 Flutter 專案根目錄下執行**（或使用 `--project-dir` 指定）
+- 並非所有平台都能在當前 OS 上建置（如 iOS 需要 macOS）
+- 每次執行會清空 `bin/` 目錄
+- `--test` 不執行建置，僅檢測環境
 
-## 許可證
+## 授權條款
 
 ```LICENSE
 Copyright (c) 2026 KagurazakaYashi
 flutter-build-all is licensed under Mulan PSL v2.
+You can use this software according to the terms and conditions of the Mulan PSL v2.
+You may obtain a copy of Mulan PSL v2 at:
+         http://license.coscl.org.cn/MulanPSL2
+THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+See the Mulan PSL v2 for more details.
 ```

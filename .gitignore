@@ -80,20 +80,13 @@ web/plugins/
 # Build outputs
 build/
 
-### Python ###
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-*.egg-info/
-.eggs/
-dist/
-*.egg
-.mypy_cache/
-.ruff_cache/
-.pytest_cache/
+### Dart ###
+.dart_tool/
+.packages
+build/
+pubspec.lock
 
-### PyCharm ###
+### IDE ###
 .idea/
 
 ### Linux ###

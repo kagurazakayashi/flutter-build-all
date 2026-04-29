@@ -1,0 +1,13 @@
+name: flutter_build_all
+description: Flutter all-platform build script (Dart implementation)
+version: 1.0.0
+publish_to: none
+
+environment:
+  sdk: ^3.4.0
+
+dependencies:
+  args: ^2.5.0
+  markdown: ^7.2.0
+  path: ^1.9.0
+  yaml: ^3.1.0
