@@ -1,0 +1,3 @@
+[submodule "flutter-icon-creator"]
+	path = flutter-icon-creator
+	url = git@github.com:kagurazakayashi/FlutterIconCreator.git
