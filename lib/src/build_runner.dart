@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter_icon_creator/flutter_icon_creator.dart' as icon_creator;
 import 'package:markdown/markdown.dart' as md;
 import 'package:path/path.dart' as p;
 import 'package:yaml/yaml.dart' as y;
@@ -135,6 +136,185 @@ void runL10nGenerate(String projectDir) {
   }
   _log('flutter gen-l10n OK.');
   _log('');
+}
+
+// =============================================================================
+// 圖示生成（透過 flutter-icon-creator 子模組）
+// =============================================================================
+
+Future<void> runIconGenerate(String projectDir) async {
+  // 自動偵測常見的圖示來源檔案路徑
+  final iconFgPaths = [
+    p.join(projectDir, 'ico', 'iconf.png'),
+    p.join(projectDir, 'ico', 'icon.png'),
+  ];
+  final iconBgPaths = [
+    p.join(projectDir, 'ico', 'iconb.png'),
+  ];
+
+  final fgPath =
+      iconFgPaths.firstWhere((pth) => File(pth).existsSync(), orElse: () => '');
+  final bgPath =
+      iconBgPaths.firstWhere((pth) => File(pth).existsSync(), orElse: () => '');
+
+  if (fgPath.isEmpty && bgPath.isEmpty) {
+    _log('No icon source files found (ico/iconf.png, ico/icon.png, ico/iconb.png), skipping icon generation.');
+    return;
+  }
+
+  _log('Generating app icons ...');
+  final args = <String>[
+    '-f',
+    projectDir,
+    if (fgPath.isNotEmpty) ...['-i', fgPath],
+    if (bgPath.isNotEmpty) ...['-b', bgPath],
+  ];
+
+  try {
+    await icon_creator.run(args);
+    _log('Icon generation OK.');
+  } on Exception catch (e) {
+    _log('Icon generation warning: $e');
+    _log('Continuing with build...');
+  }
+  _log('');
+}
+
+// =============================================================================
+// Web 內嵌字型：從 Flutter SDK 下載 fallback 字型並打包進 web 產物
+// =============================================================================
+
+const _fontsCdnBase = 'https://fonts.gstatic.com/s/';
+
+/// 專案中註冊的字體（不在 font_fallback_data.dart 中但 CanvasKit 仍會請求）
+const _projectFonts = <String>[
+  'roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2',
+];
+
+/// 透過 `where flutter` 尋找 Flutter SDK 根目錄
+String? _findFlutterSdk() {
+  final result = Process.runSync('where', ['flutter'], runInShell: true);
+  if (result.exitCode != 0) return null;
+  for (final line in (result.stdout as String).trim().split('\n')) {
+    final linePath = line.trim();
+    if (linePath.endsWith('flutter.bat') || linePath.endsWith('flutter')) {
+      final root = Directory(linePath).parent.parent.path;
+      if (File(p.join(root, 'bin', 'flutter.bat')).existsSync()) {
+        return root;
+      }
+    }
+  }
+  return null;
+}
+
+/// 從 font_fallback_data.dart 擷取 .woff2 路徑（去重）
+List<String> _parseFontUrls(String fallbackPath) {
+  final content = File(fallbackPath).readAsStringSync();
+  final regex = RegExp(r"'([a-z][^']*\.woff2)'");
+  final seen = <String>{};
+  return regex
+      .allMatches(content)
+      .map((m) => m.group(1)!)
+      .where((url) => seen.add(url))
+      .toList();
+}
+
+/// 下載 fallback 字型至快取目錄（跳過已存在檔案）
+Future<void> _downloadWebFonts(String projectDir) async {
+  final flutterRoot = _findFlutterSdk();
+  if (flutterRoot == null) {
+    _log('Warning: Cannot detect Flutter SDK, skipping font download.');
+    return;
+  }
+
+  final fallbackPath = p.join(
+    flutterRoot,
+    'bin',
+    'cache',
+    'flutter_web_sdk',
+    'lib',
+    '_engine',
+    'engine',
+    'font_fallback_data.dart',
+  );
+  if (!File(fallbackPath).existsSync()) {
+    _log('Warning: font_fallback_data.dart not found, skipping font download.');
+    return;
+  }
+  _log('  Source: $fallbackPath');
+
+  final urls = {..._parseFontUrls(fallbackPath), ..._projectFonts}.toList();
+  _log('  Found ${urls.length} font entries.');
+
+  final cacheDir = p.join(projectDir, 'web_fonts_cache');
+  Directory(cacheDir).createSync(recursive: true);
+
+  var downloaded = 0;
+  var skipped = 0;
+  var errors = 0;
+  final client = HttpClient();
+
+  for (var i = 0; i < urls.length; i++) {
+    final url = urls[i];
+    final localPath = p.join(cacheDir, url);
+    final localFile = File(localPath);
+
+    if (localFile.existsSync()) {
+      skipped++;
+      continue;
+    }
+
+    Directory(localFile.parent.path).createSync(recursive: true);
+    final fullUrl = Uri.parse('$_fontsCdnBase$url');
+
+    try {
+      final request = await client.getUrl(fullUrl);
+      final response = await request.close();
+      if (response.statusCode == 200) {
+        await localFile.openWrite().addStream(response);
+        downloaded++;
+      } else {
+        errors++;
+        _log('  FAILED: HTTP ${response.statusCode} for $url');
+      }
+    } on Exception catch (e) {
+      errors++;
+      _log('  FAILED: $e for $url');
+    }
+  }
+
+  client.close();
+  _log(
+      '  Font download complete: $downloaded downloaded, $skipped skipped, $errors errors.');
+}
+
+/// 將快取字型複製到 web 建置輸出目錄
+void _copyWebFontsToBuild(String projectDir, String webOutputDir) {
+  final cacheDir = Directory(p.join(projectDir, 'web_fonts_cache'));
+  if (!cacheDir.existsSync()) return;
+
+  final fontsBuildDir = p.join(webOutputDir, 'fonts');
+  Directory(fontsBuildDir).createSync(recursive: true);
+
+  var copied = 0;
+  var skipped = 0;
+
+  for (final entity in cacheDir.listSync(recursive: true)) {
+    if (entity is! File) continue;
+    final relPath = p.relative(entity.path, from: cacheDir.path);
+    final target = p.join(fontsBuildDir, relPath);
+    if (File(target).existsSync()) {
+      skipped++;
+      continue;
+    }
+    Directory(p.dirname(target)).createSync(recursive: true);
+    entity.copySync(target);
+    copied++;
+  }
+
+  if (copied > 0 || skipped > 0) {
+    _log('  Font copy to build: $copied copied, $skipped skipped.');
+  }
 }
 
 // =============================================================================
@@ -364,8 +544,9 @@ Future<(String status, String error)> buildOnePlatform({
   required String appcategory,
   required String appidentifier,
   required String appmacoscategory,
-  required String webRenderer,
   required String binDir,
+  String webBaseHref = '/',
+  bool webEmbedFonts = false,
 }) async {
   final ext = platformExtensions[platform] ?? '';
   final outDirName =
@@ -376,7 +557,13 @@ Future<(String status, String error)> buildOnePlatform({
   List<String> cmd;
   switch (platform) {
     case 'web':
-      cmd = ['flutter', 'build', 'web', '--web-renderer', webRenderer];
+      cmd = [
+        'flutter',
+        'build',
+        'web',
+        '--base-href',
+        webBaseHref,
+      ];
     case 'android':
       cmd = ['flutter', 'build', 'apk'];
     case 'ios':
@@ -414,6 +601,11 @@ Future<(String status, String error)> buildOnePlatform({
   // 寫入資源檔案
   if (assets.isNotEmpty) {
     writeAssetFiles(outDir, platform, assets, textCache);
+  }
+
+  // Web 內嵌字型：複製快取字型至建置輸出
+  if (platform == 'web' && webEmbedFonts) {
+    _copyWebFontsToBuild(projectDir, outDir);
   }
 
   // 平台特定後處理
@@ -540,9 +732,11 @@ Future<void> buildAll({
   String appmacoscategory = 'public.app-category.utilities',
   String? projectDir,
   int? jobs,
-  String webRenderer = 'auto',
-  bool skipAnalyze = false,
-  bool skipWeb = false,
+  String webBaseHref = '/',
+  bool analyze = true,
+  bool icon = true,
+  bool l10n = true,
+  bool webEmbedFonts = false,
 }) async {
   // 確認並切換至專案目錄
   final effectiveProjectDir = projectDir != null
@@ -569,19 +763,23 @@ Future<void> buildAll({
     _log('Version from pubspec.yaml: $effectiveVersion');
   }
 
+  // 圖示生成（透過 flutter-icon-creator）
+  if (icon) {
+    await runIconGenerate(effectiveProjectDir);
+  }
+
   // 多語系生成
-  runL10nGenerate(effectiveProjectDir);
+  if (l10n) {
+    runL10nGenerate(effectiveProjectDir);
+  }
 
   // 靜態分析
-  if (!skipAnalyze) {
+  if (analyze) {
     runFlutterAnalyze();
   }
 
   // 取得可用平台
   var platforms = getAvailablePlatforms();
-  if (skipWeb) {
-    platforms = platforms.where((p) => p != 'web').toList();
-  }
   if (targetFilter != null && targetFilter.isNotEmpty) {
     platforms = filterPlatforms(platforms, targetFilter);
   }
@@ -601,8 +799,17 @@ Future<void> buildAll({
     _log('Version: $effectiveVersion');
   }
   _log('Platforms: ${platforms.length} -> ${platforms.join(', ')}');
-  _log('Web renderer: $webRenderer');
+  if (webEmbedFonts) {
+    _log('Web base-href: $webBaseHref');
+    _log('Web embed fonts: enabled');
+  }
   _log('');
+
+  // Web 內嵌字型：預先下載至快取目錄
+  if (webEmbedFonts && platforms.contains('web')) {
+    await _downloadWebFonts(effectiveProjectDir);
+    _log('');
+  }
 
   // 準備資源檔案
   final assets = findAssetFiles(effectiveProjectDir);
@@ -664,8 +871,9 @@ Future<void> buildAll({
           appcategory: appcategory,
           appidentifier: appidentifier,
           appmacoscategory: appmacoscategory,
-          webRenderer: webRenderer,
           binDir: binDir,
+          webBaseHref: webBaseHref,
+          webEmbedFonts: webEmbedFonts,
         );
 
         await lock.acquire();
@@ -711,8 +919,9 @@ Future<void> buildAll({
         appcategory: appcategory,
         appidentifier: appidentifier,
         appmacoscategory: appmacoscategory,
-        webRenderer: webRenderer,
         binDir: binDir,
+        webBaseHref: webBaseHref,
+        webEmbedFonts: webEmbedFonts,
       );
       print(status);
       if (error.isNotEmpty) {

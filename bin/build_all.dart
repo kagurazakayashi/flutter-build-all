@@ -10,6 +10,11 @@ import 'package:args/args.dart';
 
 import 'package:flutter_build_all/build_all.dart';
 
+bool _parseOnOff(String? value, {required bool defaultValue}) {
+  if (value == null || value.isEmpty) return defaultValue;
+  return value.trim().toLowerCase() == 'on';
+}
+
 void main(List<String> arguments) async {
   final parser = ArgParser()
     ..addFlag(
@@ -20,69 +25,115 @@ void main(List<String> arguments) async {
     )
     ..addOption(
       'name',
+      abbr: 'n',
       help: 'Custom name for output folders (default: from pubspec.yaml)',
     )
     ..addOption(
       'target',
+      abbr: 'p',
       help: 'Comma-separated platforms to build, e.g. "windows,linux,web"',
     )
     ..addOption(
       'project-dir',
+      abbr: 'r',
       help: 'Flutter project root directory (default: current directory)',
     )
     ..addOption(
       'appver',
+      abbr: 'v',
       help: 'Application version for output folder naming',
     )
     ..addOption(
       'appdesc',
+      abbr: 'd',
       help: 'Application description for desktop entries',
     )
     ..addOption(
       'appgeneric',
+      abbr: 'g',
       help: 'Generic name for desktop entries',
     )
     ..addOption(
       'appcategory',
+      abbr: 'c',
       help: 'Desktop entry categories (default: Utility)',
       defaultsTo: 'Utility',
     )
     ..addOption(
       'appicon',
+      abbr: 'a',
       help:
           'Path to app icon file within the project (default: web/icons/Icon-192.png)',
       defaultsTo: 'web/icons/Icon-192.png',
     )
     ..addOption(
       'appidentifier',
+      abbr: 'I',
       help:
           'Bundle identifier for macOS (auto-derived from pubspec name if not specified)',
     )
     ..addOption(
       'appmacoscategory',
+      abbr: 'm',
       help:
           'macOS app category for Info.plist (default: public.app-category.utilities)',
       defaultsTo: 'public.app-category.utilities',
     )
     ..addOption(
       'jobs',
+      abbr: 'j',
       help: 'Number of parallel build jobs (0=CPU cores, default: sequential)',
     )
     ..addOption(
-      'web-renderer',
-      help: 'Web renderer: auto, canvaskit, or html (default: auto)',
-      defaultsTo: 'auto',
-      allowed: ['auto', 'canvaskit', 'html'],
+      'web-base-href',
+      abbr: 'b',
+      help: 'Base href for web build (default: /)',
+      defaultsTo: '/',
     )
-    ..addFlag(
-      'skip-analyze',
-      help: 'Skip flutter analyze step',
-      negatable: false,
+    ..addOption(
+      'analyze',
+      abbr: 'A',
+      help: 'Run flutter analyze before build (default: on)',
+      defaultsTo: 'on',
+      allowed: ['on', 'off'],
+      allowedHelp: {
+        'on': 'Run flutter analyze',
+        'off': 'Skip flutter analyze',
+      },
     )
-    ..addFlag(
-      'no-web',
-      help: 'Skip web platform build',
-      negatable: false,
+    ..addOption(
+      'icon',
+      abbr: 'i',
+      help: 'Auto-generate app icons before build (default: on)',
+      defaultsTo: 'on',
+      allowed: ['on', 'off'],
+      allowedHelp: {
+        'on': 'Generate icons via flutter-icon-creator',
+        'off': 'Skip icon generation',
+      },
+    )
+    ..addOption(
+      'l10n',
+      abbr: 'l',
+      help: 'Run flutter gen-l10n before build (default: on)',
+      defaultsTo: 'on',
+      allowed: ['on', 'off'],
+      allowedHelp: {
+        'on': 'Run flutter gen-l10n',
+        'off': 'Skip flutter gen-l10n',
+      },
+    )
+    ..addOption(
+      'web-embed-fonts',
+      abbr: 'f',
+      help:
+          'Download & embed Flutter fallback fonts into web build (default: off)',
+      defaultsTo: 'off',
+      allowed: ['on', 'off'],
+      allowedHelp: {
+        'on': 'Download fonts and embed into web output',
+        'off': 'Do not embed fonts',
+      },
     );
 
   late ArgResults args;
@@ -91,22 +142,20 @@ void main(List<String> arguments) async {
   } on FormatException catch (e) {
     stderr.writeln('Error: ${e.message}');
     stderr.writeln(parser.usage);
-    exit(64); // usage error
+    exit(64);
   }
 
   if (args['test'] as bool) {
-    // ---- 自我測試模式 ----
     _logTest('=== Test Mode ===');
     _logTest('Checking environment ...');
     _logTest('');
 
-    // Python 版本 -> Dart 版本
     _logTest('Dart: ${Platform.version}');
     _logTest('OS: ${Platform.operatingSystem}');
 
-    // 檢查 Flutter 是否可用
     try {
-      final result = await Process.run('flutter', ['--version'], runInShell: true);
+      final result =
+          await Process.run('flutter', ['--version'], runInShell: true);
       if (result.exitCode == 0) {
         _logTest('Flutter: available');
         _logTest('  ${(result.stdout as String).trim().split('\n').first}');
@@ -119,7 +168,6 @@ void main(List<String> arguments) async {
       exit(1);
     }
 
-    // 列出可用平台
     _logTest('');
     _logTest('Available platforms on this OS:');
     for (final p in allPlatforms) {
@@ -128,13 +176,11 @@ void main(List<String> arguments) async {
       _logTest('  $p: $mark');
     }
 
-    // 檢查可選依賴
     _logTest('');
     _logTest('Dependencies:');
     _logTest('  yaml: available (dart package)');
     _logTest('  markdown: available (dart package)');
 
-    // 嘗試解析 pubspec.yaml
     _logTest('');
     try {
       final (name, version) = getPubspecInfo(Directory.current.path);
@@ -148,7 +194,6 @@ void main(List<String> arguments) async {
     _logTest('');
     _logTest('=== Test completed ===');
   } else {
-    // ---- 一般建置模式 ----
     try {
       await buildAll(
         nameOverride: args['name'] as String?,
@@ -162,9 +207,14 @@ void main(List<String> arguments) async {
         appmacoscategory: args['appmacoscategory'] as String,
         projectDir: args['project-dir'] as String?,
         jobs: args['jobs'] != null ? int.parse(args['jobs'] as String) : null,
-        webRenderer: args['web-renderer'] as String,
-        skipAnalyze: args['skip-analyze'] as bool,
-        skipWeb: args['no-web'] as bool,
+        webBaseHref: args['web-base-href'] as String,
+        analyze: _parseOnOff(args['analyze'] as String?, defaultValue: true),
+        icon: _parseOnOff(args['icon'] as String?, defaultValue: true),
+        l10n: _parseOnOff(args['l10n'] as String?, defaultValue: true),
+        webEmbedFonts: _parseOnOff(
+          args['web-embed-fonts'] as String?,
+          defaultValue: false,
+        ),
       );
     } on Exception catch (e) {
       stderr.writeln('Error: ${e.toString()}');

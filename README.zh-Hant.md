@@ -2,7 +2,7 @@
 
 [English](README.md) | [简体中文](README.zh-Hans.md) | **繁體中文** | [日本語](README.ja.md)
 
-一個 Dart CLI 工具，放在 Flutter 專案根目錄或作為 Git 子模組使用，一鍵建置到所有支援的平台，並自動附帶資源檔案與安裝腳本。
+一個 Dart CLI 工具，放在 Flutter 專案根目錄或作為 Git 子模組使用，一鍵建置到所有支援的平台。內建圖示生成（透過 flutter-icon-creator）與多語言生成功能，並自動附帶資源檔案與安裝腳本。
 
 ## 環境要求
 
@@ -123,42 +123,33 @@ dart flutter-build-all/bin/build_all.dart --target "web" --web-renderer canvaski
 
 ## 參數一覽
 
-### 基礎參數
-
-| 參數 | 類型 | 預設值 | 說明 |
-|------|------|--------|------|
-| `--test` | 旗標 | — | 僅檢測環境，不建置 |
-| `--name` | 字串 | 自動讀取 pubspec.yaml | 自訂輸出目錄名稱 |
-| `--target` | 字串 | 全部可用平台 | 逗號分隔的平台清單，如 `"windows,linux,web"` |
-| `--appver` | 字串 | 自動讀取 pubspec.yaml | 應用版本號，影響輸出目錄命名 |
-| `--web-renderer` | 字串 | `auto` | Web 渲染器：`auto` / `canvaskit` / `html` |
-| `--no-web` | 旗標 | — | 跳過 Web 平台 |
-| `--skip-analyze` | 旗標 | — | 跳過 `flutter analyze` |
-| `--jobs` | 整數 | 序列 | 平行任務數。`0` = 自動按 CPU 核心數 |
-
-### 應用資訊參數
-
-| 參數 | 類型 | 預設值 | 說明 |
-|------|------|--------|------|
-| `--appdesc` | 字串 | 空 | 應用描述 |
-| `--appgeneric` | 字串 | 空 | 通用名稱 |
-| `--appcategory` | 字串 | `Utility` | Linux 桌面分類，多個用分號分隔 |
-| `--appicon` | 字串 | `web/icons/Icon-192.png` | 圖示路徑 |
-| `--appidentifier` | 字串 | 自動推導 | macOS Bundle Identifier |
-| `--appmacoscategory` | 字串 | `public.app-category.utilities` | macOS 應用分類 |
-
-### 路徑參數
-
-| 參數 | 類型 | 預設值 | 說明 |
-|------|------|--------|------|
-| `--project-dir` | 字串 | 當前目錄 | 指定 Flutter 專案根目錄 |
+| 參數 | 簡寫 | 類型 | 預設值 | 說明 |
+|------|------|------|--------|------|
+| `--test` | `-t` | 旗標 | — | 僅檢測環境，不建置 |
+| `--target` | `-p` | 字串 | 全部可用平台 | 逗號分隔平台清單，如 `"windows,linux,web"` |
+| `--name` | `-n` | 字串 | pubspec.yaml 自動 | 自訂輸出目錄名稱 |
+| `--appver` | `-v` | 字串 | pubspec.yaml 自動 | 版本號，影響輸出目錄命名 |
+| `--jobs` | `-j` | 整數 | 序列 | 平行任務數，`0` = CPU 核心數 |
+| `--analyze` | `-A` | on/off | `on` | 建置前執行 `flutter analyze` |
+| `--icon` | `-i` | on/off | `on` | 自動呼叫 flutter-icon-creator 生成全平台圖示 |
+| `--l10n` | `-l` | on/off | `on` | 執行 `flutter gen-l10n` |
+| `--web-embed-fonts` | `-f` | on/off | `off` | 下載 Flutter fallback 字型並內嵌到 Web 產物 |
+| `--web-base-href` | `-b` | 字串 | `/` | Web 建置 base href |
+| `--appdesc` | `-d` | 字串 | 空 | 應用描述 |
+| `--appgeneric` | `-g` | 字串 | 空 | 通用名稱 |
+| `--appcategory` | `-c` | 字串 | `Utility` | Linux 桌面分類 |
+| `--appicon` | `-a` | 字串 | `web/icons/Icon-192.png` | 圖示檔案路徑 |
+| `--appidentifier` | `-I` | 字串 | 自動推導 | macOS Bundle ID |
+| `--appmacoscategory` | `-m` | 字串 | `public.app-category.utilities` | macOS 應用分類 |
+| `--project-dir` | `-r` | 字串 | 當前目錄 | Flutter 專案根目錄 |
 
 ## 建置流程
 
 1. 讀取 `pubspec.yaml`，獲取應用名稱和版本號
-2. 檢測 `lib/l10n/app_*.arb`，若存在則執行 `flutter gen-l10n`
-3. 執行 `flutter analyze`（可用 `--skip-analyze` 跳過）
-4. 根據當前 OS 枚舉可建置平台
+2. 自動檢測 `ico/iconf.png`、`ico/icon.png` 等圖示來源檔案，若存在則呼叫 flutter-icon-creator 生成全平台圖示（`--icon=off` 跳過）
+3. 檢測 `lib/l10n/app_*.arb`，若存在則執行 `flutter gen-l10n`（`--l10n=off` 跳過）
+4. 執行 `flutter analyze`（`--analyze=off` 跳過）
+5. 根據當前 OS 枚舉可建置平台
 5. 尋找專案根目錄下的 README 和 LICENSE 檔案
 6. 逐個（或平行）執行 `flutter build`
 7. 將建置產物、資源檔案、安裝腳本複製到 `bin/` 目錄

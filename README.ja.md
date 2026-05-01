@@ -2,7 +2,7 @@
 
 [English](README.md) | [简体中文](README.zh-Hans.md) | [繁體中文](README.zh-Hant.md) | **日本語**
 
-Dart CLI ツールです。Flutter プロジェクトのルートに配置（または Git サブモジュールとして使用）し、全サポートプラットフォーム向けのビルドをワンコマンドで実行します。リソースファイルとインストールスクリプトも自動的にバンドルされます。
+Dart CLI ツールです。Flutter プロジェクトのルートに配置（または Git サブモジュールとして使用）し、全サポートプラットフォーム向けのビルドをワンコマンドで実行します。アイコン生成（flutter-icon-creator 経由）と l10n 生成を内蔵し、リソースファイルとインストールスクリプトも自動的にバンドルされます。
 
 ## 必要条件
 
@@ -123,42 +123,33 @@ dart flutter-build-all/bin/build_all.dart --target "web" --web-renderer canvaski
 
 ## オプション一覧
 
-### 基本
-
-| オプション | 型 | デフォルト | 説明 |
-|-----------|------|---------|------|
-| `--test` | フラグ | — | 環境チェックのみ |
-| `--name` | 文字列 | pubspec.yaml から自動 | 出力ディレクトリ名 |
-| `--target` | 文字列 | 全利用可能 | カンマ区切りプラットフォーム、例 `"windows,linux,web"` |
-| `--appver` | 文字列 | pubspec.yaml から自動 | アプリバージョン |
-| `--web-renderer` | 文字列 | `auto` | Web レンダラー：`auto` / `canvaskit` / `html` |
-| `--no-web` | フラグ | — | Web をスキップ |
-| `--skip-analyze` | フラグ | — | `flutter analyze` をスキップ |
-| `--jobs` | 整数 | シーケンシャル | 並列ジョブ数。`0` = CPU コア数自動 |
-
-### アプリ情報
-
-| オプション | 型 | デフォルト | 説明 |
-|-----------|------|---------|------|
-| `--appdesc` | 文字列 | 空 | アプリ説明 |
-| `--appgeneric` | 文字列 | 空 | 一般名 |
-| `--appcategory` | 文字列 | `Utility` | Linux デスクトップカテゴリ（セミコロン区切り） |
-| `--appicon` | 文字列 | `web/icons/Icon-192.png` | アイコンファイルのパス |
-| `--appidentifier` | 文字列 | 自動導出 | macOS Bundle Identifier |
-| `--appmacoscategory` | 文字列 | `public.app-category.utilities` | macOS アプリカテゴリ |
-
-### パス
-
-| オプション | 型 | デフォルト | 説明 |
-|-----------|------|---------|------|
-| `--project-dir` | 文字列 | カレント | Flutter プロジェクトルート |
+| オプション | 略称 | 型 | デフォルト | 説明 |
+|-----------|------|------|---------|------|
+| `--test` | `-t` | フラグ | — | 環境チェックのみ、ビルドなし |
+| `--target` | `-p` | 文字列 | 全利用可能 | カンマ区切りプラットフォーム、例 `"windows,linux,web"` |
+| `--name` | `-n` | 文字列 | pubspec.yaml から自動 | 出力ディレクトリ名 |
+| `--appver` | `-v` | 文字列 | pubspec.yaml から自動 | アプリバージョン |
+| `--jobs` | `-j` | 整数 | シーケンシャル | 並列ジョブ数。`0` = CPU コア数自動 |
+| `--analyze` | `-A` | on/off | `on` | ビルド前に `flutter analyze` を実行 |
+| `--icon` | `-i` | on/off | `on` | flutter-icon-creator で全プラットフォームアイコンを自動生成 |
+| `--l10n` | `-l` | on/off | `on` | `flutter gen-l10n` を実行 |
+| `--web-embed-fonts` | `-f` | on/off | `off` | Flutter フォールバックフォントをダウンロードして Web 出力に埋め込む |
+| `--web-base-href` | `-b` | 文字列 | `/` | Web ビルドの base href |
+| `--appdesc` | `-d` | 文字列 | 空 | アプリ説明 |
+| `--appgeneric` | `-g` | 文字列 | 空 | 一般名 |
+| `--appcategory` | `-c` | 文字列 | `Utility` | Linux デスクトップカテゴリ |
+| `--appicon` | `-a` | 文字列 | `web/icons/Icon-192.png` | アイコンファイルのパス |
+| `--appidentifier` | `-I` | 文字列 | 自動導出 | macOS Bundle ID |
+| `--appmacoscategory` | `-m` | 文字列 | `public.app-category.utilities` | macOS アプリカテゴリ |
+| `--project-dir` | `-r` | 文字列 | カレント | Flutter プロジェクトルート |
 
 ## ビルドプロセス
 
 1. `pubspec.yaml` からアプリ名とバージョンを読み取り
-2. `lib/l10n/app_*.arb` を検出し、存在すれば `flutter gen-l10n` を実行
-3. `flutter analyze` を実行（`--skip-analyze` でスキップ可）
-4. 現在の OS に基づいてビルド可能なプラットフォームを列挙
+2. `ico/iconf.png`、`ico/icon.png` などのアイコンソースファイルを自動検出し、flutter-icon-creator で全プラットフォームアイコンを生成（`--icon=off` でスキップ）
+3. `lib/l10n/app_*.arb` を検出し、存在すれば `flutter gen-l10n` を実行（`--l10n=off` でスキップ）
+4. `flutter analyze` を実行（`--analyze=off` でスキップ）
+5. 現在の OS に基づいてビルド可能なプラットフォームを列挙
 5. プロジェクトルートの README と LICENSE を検索
 6. 各プラットフォームで `flutter build` を実行（`--jobs` で並列化）
 7. ビルド成果物、リソース、インストールスクリプトを `bin/` にコピー

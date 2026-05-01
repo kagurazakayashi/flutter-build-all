@@ -2,7 +2,7 @@
 
 **English** | [简体中文](README.zh-Hans.md) | [繁體中文](README.zh-Hant.md) | [日本語](README.ja.md)
 
-A Dart CLI tool placed in the root of a Flutter project (or used as a Git submodule) that builds the project for all supported platforms in one command, with automatic bundling of resource files and install scripts.
+A Dart CLI tool placed in the root of a Flutter project (or used as a Git submodule) that builds the project for all supported platforms in one command. Includes built-in icon generation (via flutter-icon-creator) and l10n generation, with automatic bundling of resource files and install scripts.
 
 ## Requirements
 
@@ -86,7 +86,13 @@ dart flutter-build-all/bin/build_all.dart --no-web
 ### Skip Static Analysis (Quick Build)
 
 ```bash
-dart flutter-build-all/bin/build_all.dart --skip-analyze --target "windows"
+dart flutter-build-all/bin/build_all.dart --analyze=off --target "windows"
+```
+
+### Skip Icon Generation
+
+```bash
+dart flutter-build-all/bin/build_all.dart --icon=off --target "windows"
 ```
 
 ### Parallel Builds
@@ -119,49 +125,38 @@ dart flutter-build-all/bin/build_all.dart \
 dart flutter-build-all/bin/build_all.dart --target "web" --web-renderer canvaskit
 ```
 
-Options: `auto` (default), `canvaskit`, `html`
-
 ## Options Reference
 
-### Basic
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `--test` | flag | — | Check environment only, no build |
-| `--name` | string | auto from pubspec.yaml | Custom output directory name |
-| `--target` | string | all available | Comma-separated platforms, e.g. `"windows,linux,web"` |
-| `--appver` | string | auto from pubspec.yaml | App version (affects output directory naming) |
-| `--web-renderer` | string | `auto` | Web renderer: `auto` / `canvaskit` / `html` |
-| `--no-web` | flag | — | Skip Web platform |
-| `--skip-analyze` | flag | — | Skip `flutter analyze` |
-| `--jobs` | integer | sequential | Parallel job count. `0` = auto-detect CPU cores |
-
-### App Info
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `--appdesc` | string | empty | Application description |
-| `--appgeneric` | string | empty | Generic app name |
-| `--appcategory` | string | `Utility` | Linux desktop categories, semicolon-separated |
-| `--appicon` | string | `web/icons/Icon-192.png` | Icon file path within the project |
-| `--appidentifier` | string | auto-derived | macOS Bundle Identifier |
-| `--appmacoscategory` | string | `public.app-category.utilities` | macOS app category |
-
-### Path
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `--project-dir` | string | current directory | Flutter project root directory |
+| Option | Abbr | Type | Default | Description |
+|--------|------|------|---------|-------------|
+| `--test` | `-t` | flag | — | Check environment only, no build |
+| `--target` | `-p` | string | all available | Comma-separated platforms, e.g. `"windows,linux,web"` |
+| `--name` | `-n` | string | auto from pubspec.yaml | Custom output directory name |
+| `--appver` | `-v` | string | auto from pubspec.yaml | App version for output folder naming |
+| `--jobs` | `-j` | integer | sequential | Parallel build jobs. `0` = auto-detect CPU cores |
+| `--analyze` | `-A` | on/off | `on` | Run `flutter analyze` before build |
+| `--icon` | `-i` | on/off | `on` | Auto-generate all-platform icons via flutter-icon-creator |
+| `--l10n` | `-l` | on/off | `on` | Run `flutter gen-l10n` |
+| `--web-embed-fonts` | `-f` | on/off | `off` | Download & embed Flutter fallback fonts into web output |
+| `--web-base-href` | `-b` | string | `/` | Base href for web build |
+| `--appdesc` | `-d` | string | empty | Application description |
+| `--appgeneric` | `-g` | string | empty | Generic app name |
+| `--appcategory` | `-c` | string | `Utility` | Linux desktop categories, semicolon-separated |
+| `--appicon` | `-a` | string | `web/icons/Icon-192.png` | Icon file path within the project |
+| `--appidentifier` | `-I` | string | auto-derived | macOS Bundle Identifier |
+| `--appmacoscategory` | `-m` | string | `public.app-category.utilities` | macOS app category |
+| `--project-dir` | `-r` | string | current directory | Flutter project root directory |
 
 ## Build Process
 
 1. Read `pubspec.yaml` for app name and version
-2. Detect `lib/l10n/app_*.arb` and run `flutter gen-l10n` if present
-3. Run `flutter analyze` (skip with `--skip-analyze`)
-4. Enumerate buildable platforms based on current OS
-5. Locate README and LICENSE files in the project root
-6. Run `flutter build` for each platform (parallel with `--jobs`)
-7. Copy build artifacts, resource files, and install scripts to `bin/`
+2. Auto-detect icon source files (`ico/iconf.png`, `ico/icon.png`) and generate all-platform icons (skip with `--icon=off`)
+3. Detect `lib/l10n/app_*.arb` and run `flutter gen-l10n` if present (skip with `--l10n=off`)
+4. Run `flutter analyze` (skip with `--analyze=off`)
+5. Enumerate buildable platforms based on current OS
+6. Locate README and LICENSE files in the project root
+7. Run `flutter build` for each platform (parallel with `--jobs`)
+8. Copy build artifacts, resource files, and install scripts to `bin/`
 
 ## Output Structure
 
