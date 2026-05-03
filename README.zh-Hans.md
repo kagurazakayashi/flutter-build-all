@@ -205,3 +205,7 @@ EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
 MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 See the Mulan PSL v2 for more details.
 ```
+
+## 参见
+
+- [go-build-all](https://github.com/kagurazakayashi/go-build-all) — Go 全平台交叉编译工具，采用相同参数风格

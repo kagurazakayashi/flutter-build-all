@@ -203,3 +203,7 @@ EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
 MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 See the Mulan PSL v2 for more details.
 ```
+
+## See Also
+
+- [go-build-all](https://github.com/kagurazakayashi/go-build-all) — Go cross-compilation tool with the same parameter style

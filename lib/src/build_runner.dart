@@ -1,4 +1,11 @@
 /// Flutter 全平台建置核心邏輯
+///
+/// 本模組實作了建置流水線的所有步驟：
+/// 1. 讀取 pubspec.yaml → 2. 圖示生成 → 3. 多語系生成
+/// → 4. 靜態分析 → 5. 平台列舉 → 6. 資源準備
+/// → 7. 逐平台建置 → 8. 後處理（安裝腳本、桌面捷徑）
+///
+/// 支援序列與平行建置模式，可透過 buildAll() 的參數控制各步驟開關。
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -44,6 +51,9 @@ void _logInline(String message) {
 // pubspec.yaml 解析
 // =============================================================================
 
+/// 從指定的 Flutter 專案目錄讀取 pubspec.yaml，回傳應用名稱與版本號。
+///
+/// 若檔案不存在則拋出例外；若 name 欄位為空則回傳空字串。
 (String name, String version) getPubspecInfo(String projectDir) {
   final pubspecPath = p.join(projectDir, 'pubspec.yaml');
   final file = File(pubspecPath);
@@ -112,6 +122,9 @@ void runFlutterAnalyze() {
   _log('');
 }
 
+/// 若專案中含 lib/l10n/app_*.arb 檔案，則執行 flutter gen-l10n。
+///
+/// 若未找到 ARB 檔案則直接返回，不報錯。
 void runL10nGenerate(String projectDir) {
   final arbDir = p.join(projectDir, 'lib', 'l10n');
   if (!Directory(arbDir).existsSync()) return;
@@ -142,6 +155,10 @@ void runL10nGenerate(String projectDir) {
 // 圖示生成（透過 flutter-icon-creator 子模組）
 // =============================================================================
 
+/// 自動偵測圖示來源檔案並透過 flutter-icon-creator 生成全平台圖示。
+///
+/// 偵測順序：ico/iconf.png → ico/icon.png（前景）、ico/iconb.png（背景）。
+/// 若未找到任何來源檔案則輸出警告並跳過。
 Future<void> runIconGenerate(String projectDir) async {
   // 自動偵測常見的圖示來源檔案路徑
   final iconFgPaths = [
@@ -531,6 +548,10 @@ esac
 // 單一平台建置
 // =============================================================================
 
+/// 針對單一平台執行 Flutter 建置並複製產物至輸出目錄。
+///
+/// 回傳 (status, error) 元組。status 為 "OK"、"FAILED"。
+/// 建置成功後會自動複製建置產物、寫入資源檔案、處理桌面捷徑。
 Future<(String status, String error)> buildOnePlatform({
   required String platform,
   required String name,
@@ -720,6 +741,13 @@ class _Semaphore {
 // 主建置流程
 // =============================================================================
 
+/// 主建置流程入口。
+///
+/// 依序執行：pubspec 解析 → 圖示生成 → 多語系生成 → 靜態分析
+/// → 平台列舉 → 字型下載（若啟用） → 資源準備 → 逐平台建置。
+///
+/// 所有步驟均可透過對應的布林參數控制開關（如 analyze、icon、l10n）。
+/// 設定 jobs 參數可啟用平行建置，null 則為序列模式。
 Future<void> buildAll({
   String? nameOverride,
   String? targetFilter,
