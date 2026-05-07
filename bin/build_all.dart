@@ -10,9 +10,79 @@ import 'package:args/args.dart';
 
 import 'package:flutter_build_all/build_all.dart';
 
+/// 解析 on/off 字串為布林值
 bool _parseOnOff(String? value, {required bool defaultValue}) {
   if (value == null || value.isEmpty) return defaultValue;
   return value.trim().toLowerCase() == 'on';
+}
+
+/// 讀取簡單的 .ini 設定檔，回傳 section.key → value 對應。
+Map<String, String> _parseIniFile(String path) {
+  final file = File(path);
+  if (!file.existsSync()) throw Exception('Config file not found: $path');
+
+  final result = <String, String>{};
+  var section = '';
+
+  for (var line in file.readAsLinesSync()) {
+    line = line.trim();
+    if (line.isEmpty || line.startsWith(';') || line.startsWith('#')) continue;
+
+    if (line.startsWith('[') && line.endsWith(']')) {
+      section = line.substring(1, line.length - 1).trim();
+      continue;
+    }
+
+    // 支援 = 和 : 分隔符
+    final sepIndex = line.indexOf('=');
+    if (sepIndex == -1) {
+      final colonIndex = line.indexOf(':');
+      if (colonIndex == -1) continue;
+      final key = line.substring(0, colonIndex).trim();
+      final val = line.substring(colonIndex + 1).trim();
+      result[section.isEmpty ? key : '$section.$key'] = val;
+    } else {
+      final key = line.substring(0, sepIndex).trim();
+      final val = line.substring(sepIndex + 1).trim();
+      result[section.isEmpty ? key : '$section.$key'] = val;
+    }
+  }
+
+  return result;
+}
+
+/// 解析字串值：CLI 參數 > INI 設定檔 > 預設值
+String? _resolveStr(
+  ArgResults args,
+  Map<String, String>? iniVals,
+  String key, [
+  String? defaultValue,
+  String section = 'build',
+]) {
+  if (args.wasParsed(key)) return args[key] as String?;
+  if (iniVals != null) {
+    final v = iniVals['$section.$key'];
+    if (v != null) return v;
+  }
+  return defaultValue;
+}
+
+/// 解析 on/off 布林值：CLI 參數 > INI 設定檔 > 預設值
+bool _resolveOnOff(
+  ArgResults args,
+  Map<String, String>? iniVals,
+  String key,
+  bool defaultValue, [
+  String section = 'build',
+]) {
+  if (args.wasParsed(key)) {
+    return _parseOnOff(args[key] as String?, defaultValue: defaultValue);
+  }
+  if (iniVals != null) {
+    final v = iniVals['$section.$key'];
+    if (v != null) return _parseOnOff(v, defaultValue: defaultValue);
+  }
+  return defaultValue;
 }
 
 void main(List<String> arguments) async {
@@ -22,6 +92,11 @@ void main(List<String> arguments) async {
       abbr: 't',
       help: 'Test the script environment (no actual build)',
       negatable: false,
+    )
+    ..addOption(
+      'config',
+      abbr: 'f',
+      help: 'Path to .ini configuration file',
     )
     ..addOption(
       'name',
@@ -125,7 +200,7 @@ void main(List<String> arguments) async {
     )
     ..addOption(
       'web-embed-fonts',
-      abbr: 'f',
+      abbr: 'w',
       help:
           'Download & embed Flutter fallback fonts into web build (default: off)',
       defaultsTo: 'off',
@@ -144,6 +219,73 @@ void main(List<String> arguments) async {
     stderr.writeln(parser.usage);
     exit(64);
   }
+
+  // 載入 INI 設定檔
+  Map<String, String>? iniVals;
+  final configPath = args['config'] as String?;
+  final effectiveConfigPath = configPath ??
+      (File('build-all.ini').existsSync() ? 'build-all.ini' : null);
+  if (effectiveConfigPath != null) {
+    try {
+      iniVals = _parseIniFile(effectiveConfigPath);
+      _logInfo('Loaded config from $effectiveConfigPath');
+    } on Exception catch (e) {
+      _logInfo('WARN: cannot read config file $effectiveConfigPath: $e');
+    }
+  }
+
+  // 解析各項設定，優先順序：CLI 參數 > INI 設定檔 > 預設值
+  final effectiveName = _resolveStr(
+    args, iniVals, 'name', null, 'project',
+  );
+  final effectiveTarget = _resolveStr(
+    args, iniVals, 'target', null, 'platform',
+  );
+  final effectiveAppver = _resolveStr(
+    args, iniVals, 'appver', null, 'project',
+  );
+  final effectiveAppdesc = _resolveStr(
+    args, iniVals, 'appdesc', '', 'project',
+  );
+  final effectiveAppgeneric = _resolveStr(
+    args, iniVals, 'appgeneric', '', 'project',
+  );
+  final effectiveAppcategory = _resolveStr(
+    args, iniVals, 'appcategory', 'Utility', 'desktop',
+  );
+  final effectiveAppicon = _resolveStr(
+    args, iniVals, 'appicon', 'web/icons/Icon-192.png', 'desktop',
+  );
+  final effectiveAppidentifier = _resolveStr(
+    args, iniVals, 'appidentifier', '', 'desktop',
+  );
+  final effectiveAppmacoscategory = _resolveStr(
+    args, iniVals, 'appmacoscategory', 'public.app-category.utilities', 'desktop',
+  );
+  final effectiveProjectDir = _resolveStr(
+    args, iniVals, 'project-dir', null, 'project',
+  );
+  final effectiveWebBaseHref = _resolveStr(
+    args, iniVals, 'web-base-href', '/', 'web',
+  );
+  final effectiveJobs = _resolveStr(
+    args, iniVals, 'jobs', null, 'build',
+  );
+  final effectiveJobsInt = effectiveJobs != null
+      ? int.tryParse(effectiveJobs)
+      : null;
+  final effectiveAnalyze = _resolveOnOff(
+    args, iniVals, 'analyze', true, 'build',
+  );
+  final effectiveIcon = _resolveOnOff(
+    args, iniVals, 'icon', true, 'build',
+  );
+  final effectiveL10n = _resolveOnOff(
+    args, iniVals, 'l10n', true, 'build',
+  );
+  final effectiveWebEmbedFonts = _resolveOnOff(
+    args, iniVals, 'web-embed-fonts', false, 'web',
+  );
 
   if (args['test'] as bool) {
     _logTest('=== Test Mode ===');
@@ -192,35 +334,38 @@ void main(List<String> arguments) async {
     }
 
     _logTest('');
+    _logTest('Config file: ${effectiveConfigPath ?? '(none)'}');
     _logTest('=== Test completed ===');
   } else {
     try {
       await buildAll(
-        nameOverride: args['name'] as String?,
-        targetFilter: args['target'] as String?,
-        appver: args['appver'] as String?,
-        appdesc: (args['appdesc'] as String?) ?? '',
-        appgeneric: (args['appgeneric'] as String?) ?? '',
-        appcategory: args['appcategory'] as String,
-        appicon: args['appicon'] as String,
-        appidentifier: (args['appidentifier'] as String?) ?? '',
-        appmacoscategory: args['appmacoscategory'] as String,
-        projectDir: args['project-dir'] as String?,
-        jobs: args['jobs'] != null ? int.parse(args['jobs'] as String) : null,
-        webBaseHref: args['web-base-href'] as String,
-        analyze: _parseOnOff(args['analyze'] as String?, defaultValue: true),
-        icon: _parseOnOff(args['icon'] as String?, defaultValue: true),
-        l10n: _parseOnOff(args['l10n'] as String?, defaultValue: true),
-        webEmbedFonts: _parseOnOff(
-          args['web-embed-fonts'] as String?,
-          defaultValue: false,
-        ),
+        nameOverride: effectiveName,
+        targetFilter: effectiveTarget,
+        appver: effectiveAppver,
+        appdesc: effectiveAppdesc,
+        appgeneric: effectiveAppgeneric,
+        appcategory: effectiveAppcategory,
+        appicon: effectiveAppicon,
+        appidentifier: effectiveAppidentifier,
+        appmacoscategory: effectiveAppmacoscategory,
+        projectDir: effectiveProjectDir,
+        jobs: effectiveJobsInt,
+        webBaseHref: effectiveWebBaseHref,
+        analyze: effectiveAnalyze,
+        icon: effectiveIcon,
+        l10n: effectiveL10n,
+        webEmbedFonts: effectiveWebEmbedFonts,
       );
     } on Exception catch (e) {
       stderr.writeln('Error: ${e.toString()}');
       exit(1);
     }
   }
+}
+
+void _logInfo(String message) {
+  final ts = DateTime.now().toIso8601String().substring(11, 19);
+  print('[$ts][BUILD] $message');
 }
 
 void _logTest(String message) {

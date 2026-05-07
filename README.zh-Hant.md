@@ -126,6 +126,7 @@ dart flutter-build-all/bin/build_all.dart --target "web" --web-renderer canvaski
 | 參數 | 簡寫 | 類型 | 預設值 | 說明 |
 |------|------|------|--------|------|
 | `--test` | `-t` | 旗標 | — | 僅檢測環境，不建置 |
+| `--config` | `-f` | 字串 | `build-all.ini`（自動） | .ini 設定檔路徑 |
 | `--target` | `-p` | 字串 | 全部可用平台 | 逗號分隔平台清單，如 `"windows,linux,web"` |
 | `--name` | `-n` | 字串 | pubspec.yaml 自動 | 自訂輸出目錄名稱 |
 | `--appver` | `-v` | 字串 | pubspec.yaml 自動 | 版本號，影響輸出目錄命名 |
@@ -133,7 +134,7 @@ dart flutter-build-all/bin/build_all.dart --target "web" --web-renderer canvaski
 | `--analyze` | `-A` | on/off | `on` | 建置前執行 `flutter analyze` |
 | `--icon` | `-i` | on/off | `on` | 自動呼叫 flutter-icon-creator 生成全平台圖示 |
 | `--l10n` | `-l` | on/off | `on` | 執行 `flutter gen-l10n` |
-| `--web-embed-fonts` | `-f` | on/off | `off` | 下載 Flutter fallback 字型並內嵌到 Web 產物 |
+| `--web-embed-fonts` | `-w` | on/off | `off` | 下載 Flutter fallback 字型並內嵌到 Web 產物 |
 | `--web-base-href` | `-b` | 字串 | `/` | Web 建置 base href |
 | `--appdesc` | `-d` | 字串 | 空 | 應用描述 |
 | `--appgeneric` | `-g` | 字串 | 空 | 通用名稱 |
@@ -142,6 +143,58 @@ dart flutter-build-all/bin/build_all.dart --target "web" --web-renderer canvaski
 | `--appidentifier` | `-I` | 字串 | 自動推導 | macOS Bundle ID |
 | `--appmacoscategory` | `-m` | 字串 | `public.app-category.utilities` | macOS 應用分類 |
 | `--project-dir` | `-r` | 字串 | 當前目錄 | Flutter 專案根目錄 |
+
+## 設定檔
+
+所有參數均可透過 `.ini` 設定檔設定，命令列參數始終優先。將 `build-all.ini` 放置於專案根目錄，或透過 `--config` 指定自訂路徑：
+
+```ini
+[project]
+; 自訂輸出名稱（留空從 pubspec.yaml 自動偵測）
+name = example_app
+; 版本號，影響輸出目錄命名（留空自動偵測）
+appver = 1.0.0
+; 應用描述（用於 .desktop 檔案與 Info.plist）
+appdesc = Example Application
+; 通用名稱（用於桌面條目顯示）
+appgeneric = ExampleApp
+
+[platform]
+; 目標平台，逗號分隔（如 "windows,linux,web"）
+target = windows,linux,web
+
+[build]
+; 建置前執行 flutter analyze 靜態分析（on / off）
+analyze = on
+; 自動生成全平台圖示（on / off）
+icon = on
+; 執行 flutter gen-l10n 多語系生成（on / off）
+l10n = on
+; 平行建置任務數（0 = CPU 核心數，留空 = 序列模式）
+jobs = 0
+
+[web]
+; 下載 Flutter fallback 字型並內嵌到 Web 建置產物（on / off）
+web-embed-fonts = off
+; Web 建置的 base href（如 "/"、"/myapp/"）
+web-base-href = /
+
+[desktop]
+; Linux 桌面條目分類，分號分隔
+appcategory = Utility
+; 圖示檔案路徑（相對於專案根目錄）
+appicon = web/icons/Icon-192.png
+; macOS Bundle Identifier（留空從 pubspec.yaml 自動推導）
+appidentifier = com.example.app
+; macOS 應用分類（UTI 格式）
+appmacoscategory = public.app-category.utilities
+```
+
+命令列參數可暫時覆蓋設定檔的任意設定：
+
+```bash
+dart flutter-build-all/bin/build_all.dart -f my-config.ini -p "macos"
+```
 
 ## 建置流程
 

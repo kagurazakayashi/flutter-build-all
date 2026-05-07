@@ -126,6 +126,7 @@ dart flutter-build-all/bin/build_all.dart --target "web" --web-renderer canvaski
 | オプション | 略称 | 型 | デフォルト | 説明 |
 |-----------|------|------|---------|------|
 | `--test` | `-t` | フラグ | — | 環境チェックのみ、ビルドなし |
+| `--config` | `-f` | 文字列 | `build-all.ini`（自動） | .ini 設定ファイルのパス |
 | `--target` | `-p` | 文字列 | 全利用可能 | カンマ区切りプラットフォーム、例 `"windows,linux,web"` |
 | `--name` | `-n` | 文字列 | pubspec.yaml から自動 | 出力ディレクトリ名 |
 | `--appver` | `-v` | 文字列 | pubspec.yaml から自動 | アプリバージョン |
@@ -133,7 +134,7 @@ dart flutter-build-all/bin/build_all.dart --target "web" --web-renderer canvaski
 | `--analyze` | `-A` | on/off | `on` | ビルド前に `flutter analyze` を実行 |
 | `--icon` | `-i` | on/off | `on` | flutter-icon-creator で全プラットフォームアイコンを自動生成 |
 | `--l10n` | `-l` | on/off | `on` | `flutter gen-l10n` を実行 |
-| `--web-embed-fonts` | `-f` | on/off | `off` | Flutter フォールバックフォントをダウンロードして Web 出力に埋め込む |
+| `--web-embed-fonts` | `-w` | on/off | `off` | Flutter フォールバックフォントをダウンロードして Web 出力に埋め込む |
 | `--web-base-href` | `-b` | 文字列 | `/` | Web ビルドの base href |
 | `--appdesc` | `-d` | 文字列 | 空 | アプリ説明 |
 | `--appgeneric` | `-g` | 文字列 | 空 | 一般名 |
@@ -142,6 +143,58 @@ dart flutter-build-all/bin/build_all.dart --target "web" --web-renderer canvaski
 | `--appidentifier` | `-I` | 文字列 | 自動導出 | macOS Bundle ID |
 | `--appmacoscategory` | `-m` | 文字列 | `public.app-category.utilities` | macOS アプリカテゴリ |
 | `--project-dir` | `-r` | 文字列 | カレント | Flutter プロジェクトルート |
+
+## 設定ファイル
+
+すべてのオプションは `.ini` ファイルで設定可能です。コマンドライン引数が常に優先されます。プロジェクトルートに `build-all.ini` を置くか、`--config` でカスタムパスを指定します：
+
+```ini
+[project]
+; 出力名（空の場合は pubspec.yaml から自動検出）
+name = example_app
+; アプリバージョン（空の場合は自動検出）
+appver = 1.0.0
+; アプリ説明（.desktop ファイルと Info.plist 用）
+appdesc = Example Application
+; 一般名（デスクトップエントリ表示用）
+appgeneric = ExampleApp
+
+[platform]
+; ターゲットプラットフォーム、カンマ区切り（例 "windows,linux,web"）
+target = windows,linux,web
+
+[build]
+; ビルド前に flutter analyze を実行（on / off）
+analyze = on
+; 全プラットフォームアイコンを自動生成（on / off）
+icon = on
+; flutter gen-l10n を実行（on / off）
+l10n = on
+; 並列ジョブ数（0 = CPU コア数、空 = シーケンシャル）
+jobs = 0
+
+[web]
+; Flutter フォールバックフォントを Web 出力に埋め込む（on / off）
+web-embed-fonts = off
+; Web ビルドの base href（例 "/"、"/myapp/"）
+web-base-href = /
+
+[desktop]
+; Linux デスクトップエントリのカテゴリ、セミコロン区切り
+appcategory = Utility
+; アイコンファイルのパス（プロジェクトルートからの相対パス）
+appicon = web/icons/Icon-192.png
+; macOS Bundle Identifier（空の場合は pubspec.yaml から自動導出）
+appidentifier = com.example.app
+; macOS アプリカテゴリ（UTI 形式）
+appmacoscategory = public.app-category.utilities
+```
+
+コマンドライン引数で個別に上書き可能です：
+
+```bash
+dart flutter-build-all/bin/build_all.dart -f my-config.ini -p "macos"
+```
 
 ## ビルドプロセス
 

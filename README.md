@@ -130,6 +130,7 @@ dart flutter-build-all/bin/build_all.dart --target "web" --web-renderer canvaski
 | Option | Abbr | Type | Default | Description |
 |--------|------|------|---------|-------------|
 | `--test` | `-t` | flag | — | Check environment only, no build |
+| `--config` | `-f` | string | `build-all.ini` (auto) | Path to `.ini` configuration file |
 | `--target` | `-p` | string | all available | Comma-separated platforms, e.g. `"windows,linux,web"` |
 | `--name` | `-n` | string | auto from pubspec.yaml | Custom output directory name |
 | `--appver` | `-v` | string | auto from pubspec.yaml | App version for output folder naming |
@@ -137,7 +138,7 @@ dart flutter-build-all/bin/build_all.dart --target "web" --web-renderer canvaski
 | `--analyze` | `-A` | on/off | `on` | Run `flutter analyze` before build |
 | `--icon` | `-i` | on/off | `on` | Auto-generate all-platform icons via flutter-icon-creator |
 | `--l10n` | `-l` | on/off | `on` | Run `flutter gen-l10n` |
-| `--web-embed-fonts` | `-f` | on/off | `off` | Download & embed Flutter fallback fonts into web output |
+| `--web-embed-fonts` | `-w` | on/off | `off` | Download & embed Flutter fallback fonts into web output |
 | `--web-base-href` | `-b` | string | `/` | Base href for web build |
 | `--appdesc` | `-d` | string | empty | Application description |
 | `--appgeneric` | `-g` | string | empty | Generic app name |
@@ -146,6 +147,60 @@ dart flutter-build-all/bin/build_all.dart --target "web" --web-renderer canvaski
 | `--appidentifier` | `-I` | string | auto-derived | macOS Bundle Identifier |
 | `--appmacoscategory` | `-m` | string | `public.app-category.utilities` | macOS app category |
 | `--project-dir` | `-r` | string | current directory | Flutter project root directory |
+
+## Configuration File
+
+All options can be set via an `.ini` file instead of (or in addition to) command-line arguments. CLI arguments always take precedence.
+
+Place `build-all.ini` in the project root, or specify a custom path with `--config`:
+
+```ini
+[project]
+; Custom output name (auto-detected from pubspec.yaml if empty)
+name = example_app
+; App version (auto-detected from pubspec.yaml if empty)
+appver = 1.0.0
+; App description (for .desktop entries and Info.plist)
+appdesc = Example Application
+; Generic app name (for desktop entry display)
+appgeneric = ExampleApp
+
+[platform]
+; Target platforms, comma-separated (e.g. "windows,linux,web")
+target = windows,linux,web
+
+[build]
+; Run flutter analyze before build (on/off)
+analyze = on
+; Auto-generate all-platform icons (on/off)
+icon = on
+; Run flutter gen-l10n (on/off)
+l10n = on
+; Parallel build jobs (0 = CPU cores, empty = sequential)
+jobs = 0
+
+[web]
+; Download & embed Flutter fallback fonts into web output (on/off)
+web-embed-fonts = off
+; Base href for web build (e.g. "/", "/myapp/")
+web-base-href = /
+
+[desktop]
+; Linux desktop entry categories, semicolon-separated
+appcategory = Utility
+; Icon file path relative to project root
+appicon = web/icons/Icon-192.png
+; macOS Bundle Identifier (auto-derived from pubspec.yaml if empty)
+appidentifier = com.example.app
+; macOS app category in UTI format
+appmacoscategory = public.app-category.utilities
+```
+
+Command-line arguments can override individual settings:
+
+```bash
+dart flutter-build-all/bin/build_all.dart -f my-config.ini -p "macos"
+```
 
 ## Build Process
 
