@@ -51,7 +51,7 @@ Map<String, String> _parseIniFile(String path) {
   return result;
 }
 
-/// 解析字串值：CLI 參數 > INI 設定檔 > 預設值
+/// 解析字串值（可為 null）：CLI 參數 > INI 設定檔 > 預設值
 String? _resolveStr(
   ArgResults args,
   Map<String, String>? iniVals,
@@ -60,6 +60,22 @@ String? _resolveStr(
   String section = 'build',
 ]) {
   if (args.wasParsed(key)) return args[key] as String?;
+  if (iniVals != null) {
+    final v = iniVals['$section.$key'];
+    if (v != null) return v;
+  }
+  return defaultValue;
+}
+
+/// 解析字串值（必須非空）：CLI 參數 > INI 設定檔 > 預設值
+String _resolveStrReq(
+  ArgResults args,
+  Map<String, String>? iniVals,
+  String key,
+  String defaultValue, [
+  String section = 'build',
+]) {
+  if (args.wasParsed(key)) return (args[key] as String?) ?? defaultValue;
   if (iniVals != null) {
     final v = iniVals['$section.$key'];
     if (v != null) return v;
@@ -140,6 +156,11 @@ void main(List<String> arguments) async {
       help:
           'Path to app icon file within the project (default: web/icons/Icon-192.png)',
       defaultsTo: 'web/icons/Icon-192.png',
+    )
+    ..addOption(
+      'appiconbg',
+      abbr: 'B',
+      help: 'Path to background icon image (overrides auto-detection of ico/iconb.png)',
     )
     ..addOption(
       'appidentifier',
@@ -244,29 +265,32 @@ void main(List<String> arguments) async {
   final effectiveAppver = _resolveStr(
     args, iniVals, 'appver', null, 'project',
   );
-  final effectiveAppdesc = _resolveStr(
+  final effectiveAppdesc = _resolveStrReq(
     args, iniVals, 'appdesc', '', 'project',
   );
-  final effectiveAppgeneric = _resolveStr(
+  final effectiveAppgeneric = _resolveStrReq(
     args, iniVals, 'appgeneric', '', 'project',
   );
-  final effectiveAppcategory = _resolveStr(
+  final effectiveAppcategory = _resolveStrReq(
     args, iniVals, 'appcategory', 'Utility', 'desktop',
   );
-  final effectiveAppicon = _resolveStr(
+  final effectiveAppicon = _resolveStrReq(
     args, iniVals, 'appicon', 'web/icons/Icon-192.png', 'desktop',
   );
-  final effectiveAppidentifier = _resolveStr(
+  final effectiveAppidentifier = _resolveStrReq(
     args, iniVals, 'appidentifier', '', 'desktop',
   );
-  final effectiveAppmacoscategory = _resolveStr(
+  final effectiveAppmacoscategory = _resolveStrReq(
     args, iniVals, 'appmacoscategory', 'public.app-category.utilities', 'desktop',
+  );
+  final effectiveWebBaseHref = _resolveStrReq(
+    args, iniVals, 'web-base-href', '/', 'web',
+  );
+  final effectiveAppiconbg = _resolveStr(
+    args, iniVals, 'appiconbg', null, 'desktop',
   );
   final effectiveProjectDir = _resolveStr(
     args, iniVals, 'project-dir', null, 'project',
-  );
-  final effectiveWebBaseHref = _resolveStr(
-    args, iniVals, 'web-base-href', '/', 'web',
   );
   final effectiveJobs = _resolveStr(
     args, iniVals, 'jobs', null, 'build',
@@ -346,6 +370,7 @@ void main(List<String> arguments) async {
         appgeneric: effectiveAppgeneric,
         appcategory: effectiveAppcategory,
         appicon: effectiveAppicon,
+        appiconbg: effectiveAppiconbg,
         appidentifier: effectiveAppidentifier,
         appmacoscategory: effectiveAppmacoscategory,
         projectDir: effectiveProjectDir,

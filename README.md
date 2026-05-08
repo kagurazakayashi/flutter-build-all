@@ -78,9 +78,6 @@ dart flutter-build-all/bin/build_all.dart --target "windows,web"
 
 # Desktop only (skip Web and mobile)
 dart flutter-build-all/bin/build_all.dart --target "windows,linux,macos"
-
-# Skip Web
-dart flutter-build-all/bin/build_all.dart --no-web
 ```
 
 ### Skip Static Analysis (Quick Build)
@@ -119,12 +116,6 @@ dart flutter-build-all/bin/build_all.dart \
   --appcategory "Network;FileTransfer"
 ```
 
-### Web Renderer
-
-```bash
-dart flutter-build-all/bin/build_all.dart --target "web" --web-renderer canvaskit
-```
-
 ## Options Reference
 
 | Option | Abbr | Type | Default | Description |
@@ -144,6 +135,7 @@ dart flutter-build-all/bin/build_all.dart --target "web" --web-renderer canvaski
 | `--appgeneric` | `-g` | string | empty | Generic app name |
 | `--appcategory` | `-c` | string | `Utility` | Linux desktop categories, semicolon-separated |
 | `--appicon` | `-a` | string | `web/icons/Icon-192.png` | Icon file path within the project |
+| `--appiconbg` | `-B` | string | auto-detect | Background icon image path (overrides auto-detection) |
 | `--appidentifier` | `-I` | string | auto-derived | macOS Bundle Identifier |
 | `--appmacoscategory` | `-m` | string | `public.app-category.utilities` | macOS app category |
 | `--project-dir` | `-r` | string | current directory | Flutter project root directory |
@@ -188,8 +180,10 @@ web-base-href = /
 [desktop]
 ; Linux desktop entry categories, semicolon-separated
 appcategory = Utility
-; Icon file path relative to project root
+; Foreground icon file path relative to project root
 appicon = web/icons/Icon-192.png
+; Background icon image path (optional, overrides auto-detection of ico/iconb.png)
+; appiconbg =
 ; macOS Bundle Identifier (auto-derived from pubspec.yaml if empty)
 appidentifier = com.example.app
 ; macOS app category in UTI format

@@ -33,6 +33,15 @@ String get _scriptDir {
   }
 }
 
+/// 尋找模板檔案：先嘗試 [scriptDirPath]，若不存在則嘗試目前工作目錄中的同名檔案
+File? _findTemplate(String scriptDirPath) {
+  final f = File(scriptDirPath);
+  if (f.existsSync()) return f;
+  final cwdPath = p.join(Directory.current.path, p.basename(scriptDirPath));
+  final cwd = File(cwdPath);
+  return cwd.existsSync() ? cwd : null;
+}
+
 // =============================================================================
 // 日誌輸出
 // =============================================================================
@@ -108,9 +117,10 @@ void runFlutterClean() {
   _log('');
 }
 
-void runFlutterAnalyze() {
+void runFlutterAnalyze(String projectDir) {
   _log('Running flutter analyze ...');
-  final result = Process.runSync('flutter', ['analyze'], runInShell: true);
+  final result = Process.runSync('flutter', ['analyze'],
+      workingDirectory: projectDir, runInShell: true);
   if (result.exitCode != 0) {
     final err = (result.stderr as String).trim();
     final out = (result.stdout as String).trim();
@@ -141,7 +151,8 @@ void runL10nGenerate(String projectDir) {
   if (arbFiles.isEmpty) return;
 
   _log('Found l10n folder with app_*.arb files, running flutter gen-l10n ...');
-  final result = Process.runSync('flutter', ['gen-l10n'], runInShell: true);
+  final result = Process.runSync('flutter', ['gen-l10n'],
+      workingDirectory: projectDir, runInShell: true);
   if (result.exitCode != 0) {
     _log('flutter gen-l10n failed:');
     _log((result.stderr as String).trim());
@@ -158,8 +169,9 @@ void runL10nGenerate(String projectDir) {
 /// 自動偵測圖示來源檔案並透過 flutter-icon-creator 生成全平台圖示。
 ///
 /// 偵測順序：ico/iconf.png → ico/icon.png（前景）、ico/iconb.png（背景）。
+/// 若 [appiconbg] 不為空則優先使用，跳過自動偵測。
 /// 若未找到任何來源檔案則輸出警告並跳過。
-Future<void> runIconGenerate(String projectDir) async {
+Future<void> runIconGenerate(String projectDir, {String? appiconbg}) async {
   // 自動偵測常見的圖示來源檔案路徑
   final iconFgPaths = [
     p.join(projectDir, 'ico', 'iconf.png'),
@@ -171,8 +183,10 @@ Future<void> runIconGenerate(String projectDir) async {
 
   final fgPath =
       iconFgPaths.firstWhere((pth) => File(pth).existsSync(), orElse: () => '');
-  final bgPath =
-      iconBgPaths.firstWhere((pth) => File(pth).existsSync(), orElse: () => '');
+  // 背景：優先使用傳入的明確路徑，其次自動偵測
+  final bgPath = (appiconbg != null && appiconbg.isNotEmpty)
+      ? p.join(projectDir, appiconbg)
+      : iconBgPaths.firstWhere((pth) => File(pth).existsSync(), orElse: () => '');
 
   if (fgPath.isEmpty && bgPath.isEmpty) {
     _log('No icon source files found (ico/iconf.png, ico/icon.png, ico/iconb.png), skipping icon generation.');
@@ -409,8 +423,8 @@ void _handleLinuxDesktop({
   }
 
   final tmplPath = p.join(_scriptDir, 'install_app.sh.tmpl');
-  final tmplFile = File(tmplPath);
-  if (!tmplFile.existsSync()) {
+  final tmplFile = _findTemplate(tmplPath);
+  if (tmplFile == null) {
     _log('  Warning: install_app.sh.tmpl not found, skipping install script');
     return;
   }
@@ -467,8 +481,8 @@ void _handleWindowsShortcut({
   }
 
   final tmplPath = p.join(_scriptDir, 'install_app.ps1.tmpl');
-  final tmplFile = File(tmplPath);
-  if (!tmplFile.existsSync()) {
+  final tmplFile = _findTemplate(tmplPath);
+  if (tmplFile == null) {
     _log('  Warning: install_app.ps1.tmpl not found, skipping install script');
     return;
   }
@@ -756,6 +770,7 @@ Future<void> buildAll({
   String appgeneric = '',
   String appcategory = 'Utility',
   String appicon = 'web/icons/Icon-192.png',
+  String? appiconbg,
   String appidentifier = '',
   String appmacoscategory = 'public.app-category.utilities',
   String? projectDir,
@@ -766,6 +781,11 @@ Future<void> buildAll({
   bool l10n = true,
   bool webEmbedFonts = false,
 }) async {
+  // 自動規範化 webBaseHref：確保以 / 開頭與結尾
+  var normalizedWebBaseHref = webBaseHref.isEmpty ? '/' : webBaseHref;
+  if (!normalizedWebBaseHref.startsWith('/')) normalizedWebBaseHref = '/$normalizedWebBaseHref';
+  if (!normalizedWebBaseHref.endsWith('/')) normalizedWebBaseHref = '$normalizedWebBaseHref/';
+
   // 確認並切換至專案目錄
   final effectiveProjectDir = projectDir != null
       ? Directory(projectDir).absolute.path
@@ -793,7 +813,7 @@ Future<void> buildAll({
 
   // 圖示生成（透過 flutter-icon-creator）
   if (icon) {
-    await runIconGenerate(effectiveProjectDir);
+    await runIconGenerate(effectiveProjectDir, appiconbg: appiconbg);
   }
 
   // 多語系生成
@@ -803,7 +823,7 @@ Future<void> buildAll({
 
   // 靜態分析
   if (analyze) {
-    runFlutterAnalyze();
+    runFlutterAnalyze(effectiveProjectDir);
   }
 
   // 取得可用平台
@@ -828,7 +848,7 @@ Future<void> buildAll({
   }
   _log('Platforms: ${platforms.length} -> ${platforms.join(', ')}');
   if (webEmbedFonts) {
-    _log('Web base-href: $webBaseHref');
+    _log('Web base-href: $normalizedWebBaseHref');
     _log('Web embed fonts: enabled');
   }
   _log('');
@@ -900,7 +920,7 @@ Future<void> buildAll({
           appidentifier: appidentifier,
           appmacoscategory: appmacoscategory,
           binDir: binDir,
-          webBaseHref: webBaseHref,
+          webBaseHref: normalizedWebBaseHref,
           webEmbedFonts: webEmbedFonts,
         );
 
@@ -948,7 +968,7 @@ Future<void> buildAll({
         appidentifier: appidentifier,
         appmacoscategory: appmacoscategory,
         binDir: binDir,
-        webBaseHref: webBaseHref,
+        webBaseHref: normalizedWebBaseHref,
         webEmbedFonts: webEmbedFonts,
       );
       print(status);

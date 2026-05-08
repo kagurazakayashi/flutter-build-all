@@ -78,9 +78,6 @@ dart flutter-build-all/bin/build_all.dart --target "windows,web"
 
 # 编译桌面端（跳过 Web 和移动端）
 dart flutter-build-all/bin/build_all.dart --target "windows,linux,macos"
-
-# 跳过 Web
-dart flutter-build-all/bin/build_all.dart --no-web
 ```
 
 ### 跳过静态分析（快速构建）
@@ -119,14 +116,6 @@ dart flutter-build-all/bin/build_all.dart \
   --appcategory "Network;FileTransfer"
 ```
 
-### Web 渲染器
-
-```bash
-dart flutter-build-all/bin/build_all.dart --target "web" --web-renderer canvaskit
-```
-
-可选值：`auto`（默认）、`canvaskit`、`html`
-
 ## 参数一览
 
 | 参数 | 简写 | 类型 | 默认值 | 说明 |
@@ -146,6 +135,7 @@ dart flutter-build-all/bin/build_all.dart --target "web" --web-renderer canvaski
 | `--appgeneric` | `-g` | 字符串 | 空 | 通用名称 |
 | `--appcategory` | `-c` | 字符串 | `Utility` | Linux 桌面分类 |
 | `--appicon` | `-a` | 字符串 | `web/icons/Icon-192.png` | 图标文件路径 |
+| `--appiconbg` | `-B` | 字符串 | 自动检测 | 图标背景图片路径（覆盖 ico/iconb.png 自动检测） |
 | `--appidentifier` | `-I` | 字符串 | 自动推导 | macOS Bundle ID |
 | `--appmacoscategory` | `-m` | 字符串 | `public.app-category.utilities` | macOS 应用分类 |
 | `--project-dir` | `-r` | 字符串 | 当前目录 | Flutter 项目根目录 |
@@ -188,8 +178,10 @@ web-base-href = /
 [desktop]
 ; Linux 桌面條目分類，分號分隔
 appcategory = Utility
-; 圖示檔案路徑（相對於專案根目錄）
+; 前景圖示檔案路徑（相對於專案根目錄）
 appicon = web/icons/Icon-192.png
+; 背景圖示圖片路徑（可選，覆蓋 ico/iconb.png 自動偵測）
+; appiconbg =
 ; macOS Bundle Identifier（留空從 pubspec.yaml 自動推導）
 appidentifier = com.example.app
 ; macOS 應用分類（UTI 格式）

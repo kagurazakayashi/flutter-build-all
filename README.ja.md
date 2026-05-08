@@ -78,15 +78,18 @@ dart flutter-build-all/bin/build_all.dart --target "windows,web"
 
 # デスクトップのみ（Web とモバイルをスキップ）
 dart flutter-build-all/bin/build_all.dart --target "windows,linux,macos"
-
-# Web をスキップ
-dart flutter-build-all/bin/build_all.dart --no-web
 ```
 
 ### 静的解析をスキップ（高速ビルド）
 
 ```bash
-dart flutter-build-all/bin/build_all.dart --skip-analyze --target "windows"
+dart flutter-build-all/bin/build_all.dart --analyze=off --target "windows"
+```
+
+### アイコン生成をスキップ
+
+```bash
+dart flutter-build-all/bin/build_all.dart --icon=off --target "windows"
 ```
 
 ### 並列ビルド
@@ -113,14 +116,6 @@ dart flutter-build-all/bin/build_all.dart \
   --appcategory "Network;FileTransfer"
 ```
 
-### Web レンダラー
-
-```bash
-dart flutter-build-all/bin/build_all.dart --target "web" --web-renderer canvaskit
-```
-
-オプション：`auto`（デフォルト）、`canvaskit`、`html`
-
 ## オプション一覧
 
 | オプション | 略称 | 型 | デフォルト | 説明 |
@@ -140,6 +135,7 @@ dart flutter-build-all/bin/build_all.dart --target "web" --web-renderer canvaski
 | `--appgeneric` | `-g` | 文字列 | 空 | 一般名 |
 | `--appcategory` | `-c` | 文字列 | `Utility` | Linux デスクトップカテゴリ |
 | `--appicon` | `-a` | 文字列 | `web/icons/Icon-192.png` | アイコンファイルのパス |
+| `--appiconbg` | `-B` | 文字列 | 自動検出 | 背景アイコン画像のパス（ico/iconb.png の自動検出を上書き） |
 | `--appidentifier` | `-I` | 文字列 | 自動導出 | macOS Bundle ID |
 | `--appmacoscategory` | `-m` | 文字列 | `public.app-category.utilities` | macOS アプリカテゴリ |
 | `--project-dir` | `-r` | 文字列 | カレント | Flutter プロジェクトルート |
@@ -182,8 +178,10 @@ web-base-href = /
 [desktop]
 ; Linux デスクトップエントリのカテゴリ、セミコロン区切り
 appcategory = Utility
-; アイコンファイルのパス（プロジェクトルートからの相対パス）
+; 前景アイコンファイルのパス（プロジェクトルートからの相対パス）
 appicon = web/icons/Icon-192.png
+; 背景アイコン画像のパス（オプション、ico/iconb.png の自動検出を上書き）
+; appiconbg =
 ; macOS Bundle Identifier（空の場合は pubspec.yaml から自動導出）
 appidentifier = com.example.app
 ; macOS アプリカテゴリ（UTI 形式）
