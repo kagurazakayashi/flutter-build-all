@@ -1,4 +1,4 @@
-/// Flutter 全平台建置核心邏輯
+/// build_runner.dart — 核心建置流程：單平台建置函式與 buildAll 流程協調器
 ///
 /// 本模組實作了建置流水線的所有步驟：
 /// 1. 讀取 pubspec.yaml → 2. 圖示生成 → 3. 多語系生成
@@ -7,554 +7,48 @@
 ///
 /// 支援序列與平行建置模式，可透過 buildAll() 的參數控制各步驟開關。
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter_icon_creator/flutter_icon_creator.dart' as icon_creator;
-import 'package:markdown/markdown.dart' as md;
 import 'package:path/path.dart' as p;
-import 'package:yaml/yaml.dart' as y;
 
+import 'assets.dart';
+import 'build_steps.dart';
 import 'constants.dart';
+import 'desktop.dart';
+import 'dir_utils.dart';
+import 'log.dart';
+import 'platforms.dart';
+import 'web_fonts.dart';
 
 // =============================================================================
-// 取得腳本所在目錄（模板檔案位置）
+// 並行建置控制
 // =============================================================================
 
-/// 回傳此 `build_runner.dart` 所在目錄，若從 compiled exe 執行則回傳 exe 所在目錄
-String get _scriptDir {
-  final scriptPath = File(Platform.script.toFilePath()).absolute.path;
-  final libDir = p.dirname(scriptPath); // lib/src 或 bin
-  // 模板檔案放在套件根目錄，從 lib/src 往上兩層，從 bin 往上一層
-  if (libDir.endsWith('src')) {
-    return p.dirname(p.dirname(libDir));
-  } else {
-    return p.dirname(libDir);
-  }
-}
+/// 訊號量（Semaphore），用於控制平行建置的最大並行數
+class _Semaphore {
+  int _permits;
+  final List<Completer<void>> _waiters = [];
 
-/// 尋找模板檔案：先嘗試 [scriptDirPath]，若不存在則嘗試目前工作目錄中的同名檔案
-File? _findTemplate(String scriptDirPath) {
-  final f = File(scriptDirPath);
-  if (f.existsSync()) return f;
-  final cwdPath = p.join(Directory.current.path, p.basename(scriptDirPath));
-  final cwd = File(cwdPath);
-  return cwd.existsSync() ? cwd : null;
-}
+  _Semaphore(this._permits);
 
-// =============================================================================
-// 日誌輸出
-// =============================================================================
-
-void _log(String message) {
-  final ts = DateTime.now().toIso8601String().substring(11, 19);
-  print('[$ts][BUILD] $message');
-}
-
-void _logInline(String message) {
-  final ts = DateTime.now().toIso8601String().substring(11, 19);
-  stdout.write('[$ts][BUILD] $message');
-}
-
-// =============================================================================
-// pubspec.yaml 解析
-// =============================================================================
-
-/// 從指定的 Flutter 專案目錄讀取 pubspec.yaml，回傳應用名稱與版本號。
-///
-/// 若檔案不存在則拋出例外；若 name 欄位為空則回傳空字串。
-(String name, String version) getPubspecInfo(String projectDir) {
-  final pubspecPath = p.join(projectDir, 'pubspec.yaml');
-  final file = File(pubspecPath);
-  if (!file.existsSync()) {
-    throw Exception(
-      'pubspec.yaml not found. This directory is not a Flutter project.',
-    );
-  }
-
-  final content = file.readAsStringSync();
-  final doc = y.loadYaml(content) as y.YamlMap;
-  final name = (doc['name'] as String?) ?? '';
-  final version = (doc['version'] as String?) ?? '';
-  return (name, version);
-}
-
-// =============================================================================
-// 平台可用性檢查
-// =============================================================================
-
-List<String> getAvailablePlatforms() {
-  return allPlatforms.where(isPlatformAvailable).toList();
-}
-
-List<String> filterPlatforms(List<String> platforms, String? targetFilter) {
-  if (targetFilter == null || targetFilter.isEmpty) return platforms;
-  final targets = targetFilter
-      .split(',')
-      .map((t) => t.trim().toLowerCase())
-      .where((t) => t.isNotEmpty)
-      .toSet();
-  final filtered = platforms.where((p) => targets.contains(p)).toList();
-  if (filtered.isEmpty) {
-    _log("Warning: no platforms matched filter '$targetFilter'");
-  }
-  return filtered;
-}
-
-// =============================================================================
-// Flutter 前置步驟
-// =============================================================================
-
-void runFlutterClean() {
-  _logInline('Running flutter clean ... ');
-  final result = Process.runSync('flutter', ['clean'], runInShell: true);
-  if (result.exitCode != 0) {
-    _log('FAILED');
-    _log((result.stderr as String).trim());
-    throw Exception('flutter clean failed');
-  }
-  _log('OK');
-  _log('');
-}
-
-void runFlutterAnalyze(String projectDir) {
-  _log('Running flutter analyze ...');
-  final result = Process.runSync('flutter', ['analyze'],
-      workingDirectory: projectDir, runInShell: true);
-  if (result.exitCode != 0) {
-    final err = (result.stderr as String).trim();
-    final out = (result.stdout as String).trim();
-    _log('flutter analyze found issues:');
-    _log(err.isNotEmpty ? err : out);
-    exit(1);
-  }
-  _log('flutter analyze passed.');
-  _log('');
-}
-
-/// 若專案中含 lib/l10n/app_*.arb 檔案，則執行 flutter gen-l10n。
-///
-/// 若未找到 ARB 檔案則直接返回，不報錯。
-void runL10nGenerate(String projectDir) {
-  final arbDir = p.join(projectDir, 'lib', 'l10n');
-  if (!Directory(arbDir).existsSync()) return;
-
-  final arbFiles = Directory(arbDir)
-      .listSync()
-      .whereType<File>()
-      .where((f) {
-        final name = p.basename(f.path);
-        return name.startsWith('app_') && name.endsWith('.arb');
-      })
-      .toList();
-
-  if (arbFiles.isEmpty) return;
-
-  _log('Found l10n folder with app_*.arb files, running flutter gen-l10n ...');
-  final result = Process.runSync('flutter', ['gen-l10n'],
-      workingDirectory: projectDir, runInShell: true);
-  if (result.exitCode != 0) {
-    _log('flutter gen-l10n failed:');
-    _log((result.stderr as String).trim());
-    throw Exception('flutter gen-l10n failed');
-  }
-  _log('flutter gen-l10n OK.');
-  _log('');
-}
-
-// =============================================================================
-// 圖示生成（透過 flutter-icon-creator 子模組）
-// =============================================================================
-
-/// 自動偵測圖示來源檔案並透過 flutter-icon-creator 生成全平台圖示。
-///
-/// 偵測順序：ico/iconf.png → ico/icon.png（前景）、ico/iconb.png（背景）。
-/// 若 [appiconbg] 不為空則優先使用，跳過自動偵測。
-/// 若未找到任何來源檔案則輸出警告並跳過。
-Future<void> runIconGenerate(String projectDir, {String? appiconbg}) async {
-  // 自動偵測常見的圖示來源檔案路徑
-  final iconFgPaths = [
-    p.join(projectDir, 'ico', 'iconf.png'),
-    p.join(projectDir, 'ico', 'icon.png'),
-  ];
-  final iconBgPaths = [
-    p.join(projectDir, 'ico', 'iconb.png'),
-  ];
-
-  final fgPath =
-      iconFgPaths.firstWhere((pth) => File(pth).existsSync(), orElse: () => '');
-  // 背景：優先使用傳入的明確路徑，其次自動偵測
-  final bgPath = (appiconbg != null && appiconbg.isNotEmpty)
-      ? p.join(projectDir, appiconbg)
-      : iconBgPaths.firstWhere((pth) => File(pth).existsSync(), orElse: () => '');
-
-  if (fgPath.isEmpty && bgPath.isEmpty) {
-    _log('No icon source files found (ico/iconf.png, ico/icon.png, ico/iconb.png), skipping icon generation.');
-    return;
-  }
-
-  _log('Generating app icons ...');
-  final args = <String>[
-    '-f',
-    projectDir,
-    if (fgPath.isNotEmpty) ...['-i', fgPath],
-    if (bgPath.isNotEmpty) ...['-b', bgPath],
-  ];
-
-  try {
-    await icon_creator.run(args);
-    _log('Icon generation OK.');
-  } on Exception catch (e) {
-    _log('Icon generation warning: $e');
-    _log('Continuing with build...');
-  }
-  _log('');
-}
-
-// =============================================================================
-// Web 內嵌字型：從 Flutter SDK 下載 fallback 字型並打包進 web 產物
-// =============================================================================
-
-const _fontsCdnBase = 'https://fonts.gstatic.com/s/';
-
-/// 專案中註冊的字體（不在 font_fallback_data.dart 中但 CanvasKit 仍會請求）
-const _projectFonts = <String>[
-  'roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2',
-];
-
-/// 透過 `where flutter` 尋找 Flutter SDK 根目錄
-String? _findFlutterSdk() {
-  final result = Process.runSync('where', ['flutter'], runInShell: true);
-  if (result.exitCode != 0) return null;
-  for (final line in (result.stdout as String).trim().split('\n')) {
-    final linePath = line.trim();
-    if (linePath.endsWith('flutter.bat') || linePath.endsWith('flutter')) {
-      final root = Directory(linePath).parent.parent.path;
-      if (File(p.join(root, 'bin', 'flutter.bat')).existsSync()) {
-        return root;
-      }
+  /// 獲取一個許可，若無可用許可則阻塞等待
+  Future<void> acquire() {
+    if (_permits > 0) {
+      _permits--;
+      return Future.value();
     }
-  }
-  return null;
-}
-
-/// 從 font_fallback_data.dart 擷取 .woff2 路徑（去重）
-List<String> _parseFontUrls(String fallbackPath) {
-  final content = File(fallbackPath).readAsStringSync();
-  final regex = RegExp(r"'([a-z][^']*\.woff2)'");
-  final seen = <String>{};
-  return regex
-      .allMatches(content)
-      .map((m) => m.group(1)!)
-      .where((url) => seen.add(url))
-      .toList();
-}
-
-/// 下載 fallback 字型至快取目錄（跳過已存在檔案）
-Future<void> _downloadWebFonts(String projectDir) async {
-  final flutterRoot = _findFlutterSdk();
-  if (flutterRoot == null) {
-    _log('Warning: Cannot detect Flutter SDK, skipping font download.');
-    return;
+    final c = Completer<void>();
+    _waiters.add(c);
+    return c.future;
   }
 
-  final fallbackPath = p.join(
-    flutterRoot,
-    'bin',
-    'cache',
-    'flutter_web_sdk',
-    'lib',
-    '_engine',
-    'engine',
-    'font_fallback_data.dart',
-  );
-  if (!File(fallbackPath).existsSync()) {
-    _log('Warning: font_fallback_data.dart not found, skipping font download.');
-    return;
-  }
-  _log('  Source: $fallbackPath');
-
-  final urls = {..._parseFontUrls(fallbackPath), ..._projectFonts}.toList();
-  _log('  Found ${urls.length} font entries.');
-
-  final cacheDir = p.join(projectDir, 'web_fonts_cache');
-  Directory(cacheDir).createSync(recursive: true);
-
-  var downloaded = 0;
-  var skipped = 0;
-  var errors = 0;
-  final client = HttpClient();
-
-  for (var i = 0; i < urls.length; i++) {
-    final url = urls[i];
-    final localPath = p.join(cacheDir, url);
-    final localFile = File(localPath);
-
-    if (localFile.existsSync()) {
-      skipped++;
-      continue;
+  /// 釋放一個許可，若有等待者則喚醒最早的一個
+  void release() {
+    if (_waiters.isNotEmpty) {
+      _waiters.removeAt(0).complete();
+    } else {
+      _permits++;
     }
-
-    Directory(localFile.parent.path).createSync(recursive: true);
-    final fullUrl = Uri.parse('$_fontsCdnBase$url');
-
-    try {
-      final request = await client.getUrl(fullUrl);
-      final response = await request.close();
-      if (response.statusCode == 200) {
-        await localFile.openWrite().addStream(response);
-        downloaded++;
-      } else {
-        errors++;
-        _log('  FAILED: HTTP ${response.statusCode} for $url');
-      }
-    } on Exception catch (e) {
-      errors++;
-      _log('  FAILED: $e for $url');
-    }
-  }
-
-  client.close();
-  _log(
-      '  Font download complete: $downloaded downloaded, $skipped skipped, $errors errors.');
-}
-
-/// 將快取字型複製到 web 建置輸出目錄
-void _copyWebFontsToBuild(String projectDir, String webOutputDir) {
-  final cacheDir = Directory(p.join(projectDir, 'web_fonts_cache'));
-  if (!cacheDir.existsSync()) return;
-
-  final fontsBuildDir = p.join(webOutputDir, 'fonts');
-  Directory(fontsBuildDir).createSync(recursive: true);
-
-  var copied = 0;
-  var skipped = 0;
-
-  for (final entity in cacheDir.listSync(recursive: true)) {
-    if (entity is! File) continue;
-    final relPath = p.relative(entity.path, from: cacheDir.path);
-    final target = p.join(fontsBuildDir, relPath);
-    if (File(target).existsSync()) {
-      skipped++;
-      continue;
-    }
-    Directory(p.dirname(target)).createSync(recursive: true);
-    entity.copySync(target);
-    copied++;
-  }
-
-  if (copied > 0 || skipped > 0) {
-    _log('  Font copy to build: $copied copied, $skipped skipped.');
-  }
-}
-
-// =============================================================================
-// 資源檔案處理
-// =============================================================================
-
-Map<String, String> findAssetFiles(String projectDir) {
-  final assets = <String, String>{};
-  final dir = Directory(projectDir);
-  for (final entity in dir.listSync()) {
-    if (entity is! File) continue;
-    final name = p.basename(entity.path);
-    if (name == 'LICENSE') {
-      assets['LICENSE.txt'] = name;
-    } else if (name.startsWith('README') && name.endsWith('.md')) {
-      final outName = '${name.substring(0, name.length - 3)}.html';
-      assets[outName] = name;
-    }
-  }
-  return assets;
-}
-
-String convertMarkdown(String text) {
-  return md.markdownToHtml(text, extensionSet: md.ExtensionSet.gitHubFlavored);
-}
-
-void writeAssetFiles(
-  String outDir,
-  String platform,
-  Map<String, String> assets,
-  Map<String, String> textCache,
-) {
-  for (final entry in assets.entries) {
-    final outPath = p.join(outDir, entry.key);
-    var text = textCache[entry.value] ?? '';
-    if (entry.key.endsWith('.html')) {
-      File(outPath).writeAsStringSync(text);
-    } else if (entry.key.endsWith('.txt')) {
-      if (platform == 'windows') {
-        text = text.replaceAll('\n', '\r\n');
-        // 寫入 UTF-8 BOM
-        final file = File(outPath);
-        final sink = file.openWrite();
-        sink.add(const [0xEF, 0xBB, 0xBF]);
-        sink.add(utf8.encode(text));
-        sink.close();
-      } else {
-        File(outPath).writeAsStringSync(text);
-      }
-    }
-  }
-}
-
-// =============================================================================
-// 桌面平台後處理
-// =============================================================================
-
-void _handleLinuxDesktop({
-  required String outDir,
-  required String name,
-  required String ext,
-  required String appicon,
-  required String appdesc,
-  required String appgeneric,
-  required String appcategory,
-}) {
-  final iconFile = p.basename(appicon);
-  final iconName = p.basenameWithoutExtension(iconFile);
-
-  if (File(appicon).existsSync()) {
-    final dst = p.join(outDir, iconFile);
-    if (!File(dst).existsSync()) {
-      File(appicon).copySync(dst);
-    }
-  }
-
-  final tmplPath = p.join(_scriptDir, 'install_app.sh.tmpl');
-  final tmplFile = _findTemplate(tmplPath);
-  if (tmplFile == null) {
-    _log('  Warning: install_app.sh.tmpl not found, skipping install script');
-    return;
-  }
-
-  var template = tmplFile.readAsStringSync();
-
-  final replacements = {
-    '{{APP_NAME}}': name,
-    '{{APP_EXEC}}': '$name$ext',
-    '{{APP_ICON_FILE}}': iconFile,
-    '{{APP_ICON_NAME}}': iconName,
-    '{{APP_COMMENT}}': appdesc.isNotEmpty ? appdesc : name,
-    '{{APP_GENERIC_NAME}}': appgeneric.isNotEmpty ? appgeneric : name,
-    '{{APP_CATEGORIES}}': appcategory,
-    '{{APP_DESKTOP_NAME}}': name,
-  };
-
-  for (final entry in replacements.entries) {
-    template = template.replaceAll(entry.key, entry.value);
-  }
-
-  final scriptPath = p.join(outDir, 'install_app.sh');
-  File(scriptPath).writeAsStringSync(template);
-  // 設定執行權限（Linux/macOS）
-  if (!Platform.isWindows) {
-    Process.runSync('chmod', ['755', scriptPath]);
-  }
-}
-
-void _handleWindowsShortcut({
-  required String outDir,
-  required String name,
-  required String ext,
-  required String appdesc,
-  required String appgeneric,
-  required String projectDir,
-}) {
-  // 尋找 ico 圖示
-  final icoPaths = [
-    p.join(projectDir, 'ico', 'icon.ico'),
-    p.join(projectDir, 'icon.ico'),
-    p.join(projectDir, 'windows', 'runner', 'resources', 'app_icon.ico'),
-  ];
-  var iconFile = '';
-  for (final icoPath in icoPaths) {
-    if (File(icoPath).existsSync()) {
-      iconFile = p.basename(icoPath);
-      final dst = p.join(outDir, iconFile);
-      if (!File(dst).existsSync()) {
-        File(icoPath).copySync(dst);
-      }
-      break;
-    }
-  }
-
-  final tmplPath = p.join(_scriptDir, 'install_app.ps1.tmpl');
-  final tmplFile = _findTemplate(tmplPath);
-  if (tmplFile == null) {
-    _log('  Warning: install_app.ps1.tmpl not found, skipping install script');
-    return;
-  }
-
-  var template = tmplFile.readAsStringSync();
-
-  final replacements = {
-    '{{APP_NAME}}': name,
-    '{{APP_EXEC}}': '$name$ext',
-    '{{APP_ICON}}': iconFile,
-    '{{APP_COMMENT}}': appdesc.isNotEmpty ? appdesc : name,
-    '{{APP_DESKTOP_NAME}}': name,
-  };
-
-  for (final entry in replacements.entries) {
-    template = template.replaceAll(entry.key, entry.value);
-  }
-
-  final scriptPath = p.join(outDir, 'install_app.ps1');
-  // Windows 使用 UTF-8-BOM
-  final file = File(scriptPath);
-  final sink = file.openWrite();
-  sink.add(const [0xEF, 0xBB, 0xBF]);
-  sink.add(utf8.encode(template));
-  sink.close();
-}
-
-void _handleMacosBundle({
-  required String outDir,
-  required String name,
-  required String appver,
-  required String appdesc,
-  required String appgeneric,
-  required String appidentifier,
-  required String appmacoscategory,
-}) {
-  // 產生 macOS 安裝腳本
-  final installScript = '''#!/bin/sh
-set -e
-
-SCRIPT_DIR="\$(cd "\$(dirname "\$0")" && pwd)"
-APP_NAME="$name"
-APP_BUNDLE="\$SCRIPT_DIR/\${APP_NAME}.app"
-DEST="/Applications/\${APP_NAME}.app"
-
-case "\${1:-}" in
-    install)
-        echo "[install] Installing \${APP_NAME} to /Applications ..."
-        if [ -d "\$DEST" ]; then
-            rm -rf "\$DEST"
-        fi
-        cp -R "\$APP_BUNDLE" "\$DEST"
-        echo "[install] Done. \${APP_NAME} installed to /Applications."
-        ;;
-    uninstall)
-        echo "[uninstall] Removing \${APP_NAME} ..."
-        rm -rf "\$DEST"
-        echo "[uninstall] Done."
-        ;;
-    *)
-        echo "Usage: \$0 {install|uninstall}"
-        echo "  install   - Copy .app to /Applications"
-        echo "  uninstall - Remove from /Applications"
-        exit 1
-        ;;
-esac
-''';
-
-  final scriptPath = p.join(outDir, 'install_app.sh');
-  File(scriptPath).writeAsStringSync(installScript);
-  if (!Platform.isWindows) {
-    Process.runSync('chmod', ['755', scriptPath]);
   }
 }
 
@@ -607,7 +101,7 @@ Future<(String status, String error)> buildOnePlatform({
       cmd = ['flutter', 'build', platform];
   }
 
-  _logInline('Building $platform ... ');
+  logMessageInline('Building $platform ... ');
 
   final result = await Process.run(
     cmd.first,
@@ -629,7 +123,7 @@ Future<(String status, String error)> buildOnePlatform({
     final buildSrcAbs = p.join(projectDir, buildSrc);
     final buildSrcDir = Directory(buildSrcAbs);
     if (buildSrcDir.existsSync()) {
-      _copyDirectory(buildSrcAbs, outDir);
+      copyDirectory(buildSrcAbs, outDir);
     }
   }
 
@@ -640,14 +134,14 @@ Future<(String status, String error)> buildOnePlatform({
 
   // Web 內嵌字型：複製快取字型至建置輸出
   if (platform == 'web' && webEmbedFonts) {
-    _copyWebFontsToBuild(projectDir, outDir);
+    copyWebFontsToBuild(projectDir, outDir);
   }
 
   // 平台特定後處理
   final fullAppicon = p.join(projectDir, appicon);
   switch (platform) {
     case 'linux':
-      _handleLinuxDesktop(
+      handleLinuxDesktop(
         outDir: outDir,
         name: name,
         ext: ext,
@@ -657,7 +151,7 @@ Future<(String status, String error)> buildOnePlatform({
         appcategory: appcategory,
       );
     case 'windows':
-      _handleWindowsShortcut(
+      handleWindowsShortcut(
         outDir: outDir,
         name: name,
         ext: ext,
@@ -666,7 +160,7 @@ Future<(String status, String error)> buildOnePlatform({
         projectDir: projectDir,
       );
     case 'macos':
-      _handleMacosBundle(
+      handleMacosBundle(
         outDir: outDir,
         name: name,
         appver: appver,
@@ -678,77 +172,6 @@ Future<(String status, String error)> buildOnePlatform({
   }
 
   return ('OK', '');
-}
-
-// =============================================================================
-// 目錄複製輔助
-// =============================================================================
-
-void _copyDirectory(String src, String dst) {
-  for (final entity in Directory(src).listSync()) {
-    final target = p.join(dst, p.basename(entity.path));
-    if (entity is Directory) {
-      if (!Directory(target).existsSync()) {
-        // 遞迴複製
-        _copyRecursive(entity.path, target);
-      } else {
-        _mergeDirectory(entity.path, target);
-      }
-    } else if (entity is File) {
-      entity.copySync(target);
-    }
-  }
-}
-
-void _copyRecursive(String src, String dst) {
-  Directory(dst).createSync(recursive: true);
-  for (final entity in Directory(src).listSync()) {
-    final target = p.join(dst, p.basename(entity.path));
-    if (entity is Directory) {
-      _copyRecursive(entity.path, target);
-    } else if (entity is File) {
-      entity.copySync(target);
-    }
-  }
-}
-
-void _mergeDirectory(String src, String dst) {
-  for (final entity in Directory(src).listSync(recursive: true)) {
-    if (entity is! File) continue;
-    final rel = p.relative(entity.path, from: src);
-    final target = p.join(dst, rel);
-    Directory(p.dirname(target)).createSync(recursive: true);
-    entity.copySync(target);
-  }
-}
-
-// =============================================================================
-// 並行建置控制
-// =============================================================================
-
-class _Semaphore {
-  int _permits;
-  final List<Completer<void>> _waiters = [];
-
-  _Semaphore(this._permits);
-
-  Future<void> acquire() {
-    if (_permits > 0) {
-      _permits--;
-      return Future.value();
-    }
-    final c = Completer<void>();
-    _waiters.add(c);
-    return c.future;
-  }
-
-  void release() {
-    if (_waiters.isNotEmpty) {
-      _waiters.removeAt(0).complete();
-    } else {
-      _permits++;
-    }
-  }
 }
 
 // =============================================================================
@@ -793,7 +216,7 @@ Future<void> buildAll({
   if (!Directory(effectiveProjectDir).existsSync()) {
     throw Exception('Project directory not found: $effectiveProjectDir');
   }
-  _log('Project directory: $effectiveProjectDir');
+  logMessage('Project directory: $effectiveProjectDir');
 
   // 讀取 pubspec.yaml
   final (name, detectedVersion) = getPubspecInfo(effectiveProjectDir);
@@ -802,13 +225,13 @@ Future<void> buildAll({
       "Cannot find 'name' in pubspec.yaml. This directory is not a Flutter project.",
     );
   }
-  _log('pubspec.yaml found, this is a Flutter project.');
-  _log('');
+  logMessage('pubspec.yaml found, this is a Flutter project.');
+  logMessage('');
 
   final effectiveName = nameOverride ?? name;
   final effectiveVersion = appver ?? detectedVersion;
   if (effectiveVersion.isNotEmpty) {
-    _log('Version from pubspec.yaml: $effectiveVersion');
+    logMessage('Version from pubspec.yaml: $effectiveVersion');
   }
 
   // 圖示生成（透過 flutter-icon-creator）
@@ -838,25 +261,25 @@ Future<void> buildAll({
           : allPlatforms)
       .where((p) => allPlatforms.contains(p) && !isPlatformAvailable(p));
   for (final p in unavailable) {
-    _log(
+    logMessage(
         "Note: platform '$p' cannot be built on this OS (${Platform.operatingSystem}), skipped.");
   }
 
-  _log('App: $effectiveName');
+  logMessage('App: $effectiveName');
   if (effectiveVersion.isNotEmpty) {
-    _log('Version: $effectiveVersion');
+    logMessage('Version: $effectiveVersion');
   }
-  _log('Platforms: ${platforms.length} -> ${platforms.join(', ')}');
+  logMessage('Platforms: ${platforms.length} -> ${platforms.join(', ')}');
   if (webEmbedFonts) {
-    _log('Web base-href: $normalizedWebBaseHref');
-    _log('Web embed fonts: enabled');
+    logMessage('Web base-href: $normalizedWebBaseHref');
+    logMessage('Web embed fonts: enabled');
   }
-  _log('');
+  logMessage('');
 
   // Web 內嵌字型：預先下載至快取目錄
   if (webEmbedFonts && platforms.contains('web')) {
-    await _downloadWebFonts(effectiveProjectDir);
-    _log('');
+    await downloadWebFonts(effectiveProjectDir);
+    logMessage('');
   }
 
   // 準備資源檔案
@@ -871,18 +294,18 @@ Future<void> buildAll({
   }
 
   if (assets.isNotEmpty) {
-    _log('Asset files to include in each output:');
+    logMessage('Asset files to include in each output:');
     for (final outName in assets.keys.toList()..sort()) {
-      _log('  $outName');
+      logMessage('  $outName');
     }
-    _log('');
+    logMessage('');
   }
 
   // 清除舊的 bin/ 目錄
   final binDir = p.join(effectiveProjectDir, 'bin');
   if (Directory(binDir).existsSync()) {
     Directory(binDir).deleteSync(recursive: true);
-    _log('Removed old bin directory.');
+    logMessage('Removed old bin directory.');
   }
   Directory(binDir).createSync();
 
@@ -892,8 +315,8 @@ Future<void> buildAll({
   if (jobs != null) {
     // ---- 平行建置 ----
     final maxWorkers = jobs == 0 ? Platform.numberOfProcessors : jobs;
-    _log('Building with $maxWorkers parallel workers');
-    _log('');
+    logMessage('Building with $maxWorkers parallel workers');
+    logMessage('');
 
     final semaphore = _Semaphore(maxWorkers);
     final lock = _Semaphore(1);
@@ -926,11 +349,11 @@ Future<void> buildAll({
 
         await lock.acquire();
         try {
-          _log('Building $label ... $status');
+          logMessage('Building $label ... $status');
           if (error.isNotEmpty) {
             final shortErr =
                 error.length > 500 ? '${error.substring(0, 500)}...' : error;
-            _log('  $shortErr');
+            logMessage('  $shortErr');
             errors.add('$platform: $error');
           }
           if (status == 'FAILED') {
@@ -953,7 +376,7 @@ Future<void> buildAll({
       final label = effectiveVersion.isNotEmpty
           ? '${effectiveName}_v${effectiveVersion}_$platform'
           : '${effectiveName}_$platform';
-      _logInline('Building $label ... ');
+      logMessageInline('Building $label ... ');
       final (status, error) = await buildOnePlatform(
         platform: platform,
         name: effectiveName,
@@ -973,7 +396,7 @@ Future<void> buildAll({
       );
       print(status);
       if (error.isNotEmpty) {
-        _log(
+        logMessage(
             '  ${error.length > 500 ? '${error.substring(0, 500)}...' : error}');
       }
       if (status == 'FAILED') {
@@ -984,6 +407,6 @@ Future<void> buildAll({
     }
   }
 
-  _log('');
-  _log('Done. Success: $success, Failed: $failed');
+  logMessage('');
+  logMessage('Done. Success: $success, Failed: $failed');
 }

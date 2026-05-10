@@ -1,4 +1,4 @@
-/// Flutter 全平台建置腳本 —— CLI 入口
+/// build_all.dart — Flutter 全平台建置 CLI 入口
 ///
 /// 從 Flutter 專案根目錄執行此腳本，會自動讀取 pubspec.yaml 取得應用名稱與版本，
 /// 並針對所有可用的平台進行建置。
@@ -101,6 +101,7 @@ bool _resolveOnOff(
   return defaultValue;
 }
 
+/// CLI 進入點：解析命令列參數與 INI 設定檔後執行全平台建置
 void main(List<String> arguments) async {
   final parser = ArgParser()
     ..addFlag(
@@ -388,11 +389,13 @@ void main(List<String> arguments) async {
   }
 }
 
+/// 輸出一行帶時間戳的資訊日誌
 void _logInfo(String message) {
   final ts = DateTime.now().toIso8601String().substring(11, 19);
   print('[$ts][BUILD] $message');
 }
 
+/// 輸出一行帶時間戳的測試模式日誌
 void _logTest(String message) {
   final ts = DateTime.now().toIso8601String().substring(11, 19);
   print('[$ts][BUILD] $message');

@@ -1,6 +1,7 @@
-/// 平台相關常數定義
+/// constants.dart — 平台相關常數定義
 import 'dart:io' show Platform;
 
+/// 全部支援的平台清單
 const allPlatforms = ['windows', 'linux', 'macos', 'web', 'android', 'ios'];
 
 /// 需要桌面安裝腳本的平台
