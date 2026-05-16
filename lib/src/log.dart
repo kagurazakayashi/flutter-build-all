@@ -1,4 +1,8 @@
+// ignore_for_file: avoid_print
+
 /// log.dart — 日誌輸出輔助函式
+library;
+
 import 'dart:io' show stdout;
 
 /// 輸出一行帶時間戳的日誌訊息

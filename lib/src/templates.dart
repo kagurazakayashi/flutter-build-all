@@ -1,4 +1,6 @@
 /// templates.dart — 模板檔案尋找與路徑輔助
+library;
+
 import 'dart:io' show File, Platform, Directory;
 
 import 'package:path/path.dart' as p;

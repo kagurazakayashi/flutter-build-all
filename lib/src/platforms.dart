@@ -1,4 +1,6 @@
 /// platforms.dart — 平台可用性檢查與篩選
+library;
+
 import 'constants.dart';
 import 'log.dart';
 

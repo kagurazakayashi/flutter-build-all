@@ -1,4 +1,6 @@
 /// build_steps.dart — Flutter 建置前置步驟：clean、analyze、l10n生成、圖示生成
+library;
+
 import 'dart:async' show Future;
 
 // ignore: depend_on_referenced_packages

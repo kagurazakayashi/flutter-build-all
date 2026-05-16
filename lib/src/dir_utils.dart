@@ -1,4 +1,6 @@
 /// dir_utils.dart — 目錄複製與合併輔助函式
+library;
+
 import 'dart:io' show Directory, File;
 
 import 'package:path/path.dart' as p;

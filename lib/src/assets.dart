@@ -1,4 +1,6 @@
 /// assets.dart — pubspec.yaml 解析與資源檔案處理
+library;
+
 import 'dart:convert' show utf8;
 import 'dart:io' show File, Directory;
 

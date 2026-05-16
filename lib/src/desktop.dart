@@ -1,4 +1,6 @@
 /// desktop.dart — 桌面平台後處理：Linux 安裝腳本、Windows 捷徑、macOS Bundle
+library;
+
 import 'dart:convert' show utf8;
 import 'dart:io' show File, Platform, Process;
 

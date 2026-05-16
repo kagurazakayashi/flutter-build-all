@@ -1,4 +1,6 @@
 /// web_fonts.dart — Web 內嵌字型：從 Flutter SDK 下載 fallback 字型並打包進 web 產物
+library;
+
 import 'dart:async' show Future;
 import 'dart:io' show Directory, File, HttpClient, Process;
 

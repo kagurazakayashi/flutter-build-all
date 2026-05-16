@@ -1,9 +1,13 @@
+// ignore_for_file: avoid_print
+
 /// build_all.dart — Flutter 全平台建置 CLI 入口
 ///
 /// 從 Flutter 專案根目錄執行此腳本，會自動讀取 pubspec.yaml 取得應用名稱與版本，
 /// 並針對所有可用的平台進行建置。
 /// 建置完成後會在 bin/ 目錄下產生各平台的輸出資料夾，
 /// 內含執行檔、README、LICENSE 以及平台對應的安裝腳本。
+library;
+
 import 'dart:io';
 
 import 'package:args/args.dart';

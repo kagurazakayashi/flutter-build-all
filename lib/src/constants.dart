@@ -1,4 +1,6 @@
 /// constants.dart — 平台相關常數定義
+library;
+
 import 'dart:io' show Platform;
 
 /// 全部支援的平台清單
@@ -30,11 +32,13 @@ const platformExtensions = <String, String>{
 /// 檢查指定平台是否可在當前 OS 上建置
 bool isPlatformAvailable(String platform) {
   if (Platform.isWindows &&
-      !const {'windows', 'web', 'android'}.contains(platform)) return false;
+      !const {'windows', 'web', 'android'}.contains(platform)) { return false; }
   if (Platform.isMacOS &&
-      !const {'macos', 'ios', 'web', 'android'}.contains(platform))
+      !const {'macos', 'ios', 'web', 'android'}.contains(platform)) {
     return false;
-  if (Platform.isLinux && !const {'linux', 'web', 'android'}.contains(platform))
+  }
+  if (Platform.isLinux && !const {'linux', 'web', 'android'}.contains(platform)) {
     return false;
+  }
   return true;
 }

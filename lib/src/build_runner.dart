@@ -6,6 +6,8 @@
 /// → 7. 逐平台建置 → 8. 後處理（安裝腳本、桌面捷徑）
 ///
 /// 支援序列與平行建置模式，可透過 buildAll() 的參數控制各步驟開關。
+library;
+
 import 'dart:async';
 import 'dart:io';
 
@@ -394,7 +396,7 @@ Future<void> buildAll({
         webBaseHref: normalizedWebBaseHref,
         webEmbedFonts: webEmbedFonts,
       );
-      print(status);
+      logMessage(status);
       if (error.isNotEmpty) {
         logMessage(
             '  ${error.length > 500 ? '${error.substring(0, 500)}...' : error}');
