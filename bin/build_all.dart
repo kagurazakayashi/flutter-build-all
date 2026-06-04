@@ -22,13 +22,13 @@ bool _parseOnOff(String? value, {required bool defaultValue}) {
 
 /// 讀取簡單的 .ini 設定檔，回傳 section.key → value 對應。
 Map<String, String> _parseIniFile(String path) {
-  final file = File(path);
+  final File file = File(path);
   if (!file.existsSync()) throw Exception('Config file not found: $path');
 
-  final result = <String, String>{};
-  var section = '';
+  final Map<String, String> result = <String, String>{};
+  String section = '';
 
-  for (var line in file.readAsLinesSync()) {
+  for (String line in file.readAsLinesSync()) {
     line = line.trim();
     if (line.isEmpty || line.startsWith(';') || line.startsWith('#')) continue;
 
@@ -38,16 +38,16 @@ Map<String, String> _parseIniFile(String path) {
     }
 
     // 支援 = 和 : 分隔符
-    final sepIndex = line.indexOf('=');
+    final int sepIndex = line.indexOf('=');
     if (sepIndex == -1) {
-      final colonIndex = line.indexOf(':');
+      final int colonIndex = line.indexOf(':');
       if (colonIndex == -1) continue;
-      final key = line.substring(0, colonIndex).trim();
-      final val = line.substring(colonIndex + 1).trim();
+      final String key = line.substring(0, colonIndex).trim();
+      final String val = line.substring(colonIndex + 1).trim();
       result[section.isEmpty ? key : '$section.$key'] = val;
     } else {
-      final key = line.substring(0, sepIndex).trim();
-      final val = line.substring(sepIndex + 1).trim();
+      final String key = line.substring(0, sepIndex).trim();
+      final String val = line.substring(sepIndex + 1).trim();
       result[section.isEmpty ? key : '$section.$key'] = val;
     }
   }
@@ -65,7 +65,7 @@ String? _resolveStr(
 ]) {
   if (args.wasParsed(key)) return args[key] as String?;
   if (iniVals != null) {
-    final v = iniVals['$section.$key'];
+    final String? v = iniVals['$section.$key'];
     if (v != null) return v;
   }
   return defaultValue;
@@ -81,7 +81,7 @@ String _resolveStrReq(
 ]) {
   if (args.wasParsed(key)) return (args[key] as String?) ?? defaultValue;
   if (iniVals != null) {
-    final v = iniVals['$section.$key'];
+    final String? v = iniVals['$section.$key'];
     if (v != null) return v;
   }
   return defaultValue;
@@ -99,7 +99,7 @@ bool _resolveOnOff(
     return _parseOnOff(args[key] as String?, defaultValue: defaultValue);
   }
   if (iniVals != null) {
-    final v = iniVals['$section.$key'];
+    final String? v = iniVals['$section.$key'];
     if (v != null) return _parseOnOff(v, defaultValue: defaultValue);
   }
   return defaultValue;
@@ -107,7 +107,7 @@ bool _resolveOnOff(
 
 /// CLI 進入點：解析命令列參數與 INI 設定檔後執行全平台建置
 void main(List<String> arguments) async {
-  final parser = ArgParser()
+  final ArgParser parser = ArgParser()
     ..addFlag(
       'test',
       abbr: 't',
@@ -248,123 +248,124 @@ void main(List<String> arguments) async {
 
   // 載入 INI 設定檔
   Map<String, String>? iniVals;
-  final configPath = args['config'] as String?;
-  final effectiveConfigPath = configPath ??
+  final String? configPath = args['config'] as String?;
+  final String? effectiveConfigPath = configPath ??
       (File('build-all.ini').existsSync() ? 'build-all.ini' : null);
   if (effectiveConfigPath != null) {
     try {
       iniVals = _parseIniFile(effectiveConfigPath);
-      _logInfo('Loaded config from $effectiveConfigPath');
+      _log('Loaded config from $effectiveConfigPath');
     } on Exception catch (e) {
-      _logInfo('WARN: cannot read config file $effectiveConfigPath: $e');
+      _log('WARN: cannot read config file $effectiveConfigPath: $e');
     }
   }
 
   // 解析各項設定，優先順序：CLI 參數 > INI 設定檔 > 預設值
-  final effectiveName = _resolveStr(
+  final String? effectiveName = _resolveStr(
     args, iniVals, 'name', null, 'project',
   );
-  final effectiveTarget = _resolveStr(
+  final String? effectiveTarget = _resolveStr(
     args, iniVals, 'target', null, 'platform',
   );
-  final effectiveAppver = _resolveStr(
+  final String? effectiveAppver = _resolveStr(
     args, iniVals, 'appver', null, 'project',
   );
-  final effectiveAppdesc = _resolveStrReq(
+  final String effectiveAppdesc = _resolveStrReq(
     args, iniVals, 'appdesc', '', 'project',
   );
-  final effectiveAppgeneric = _resolveStrReq(
+  final String effectiveAppgeneric = _resolveStrReq(
     args, iniVals, 'appgeneric', '', 'project',
   );
-  final effectiveAppcategory = _resolveStrReq(
+  final String effectiveAppcategory = _resolveStrReq(
     args, iniVals, 'appcategory', 'Utility', 'desktop',
   );
-  final effectiveAppicon = _resolveStrReq(
+  final String effectiveAppicon = _resolveStrReq(
     args, iniVals, 'appicon', 'web/icons/Icon-192.png', 'desktop',
   );
-  final effectiveAppidentifier = _resolveStrReq(
+  final String effectiveAppidentifier = _resolveStrReq(
     args, iniVals, 'appidentifier', '', 'desktop',
   );
-  final effectiveAppmacoscategory = _resolveStrReq(
+  final String effectiveAppmacoscategory = _resolveStrReq(
     args, iniVals, 'appmacoscategory', 'public.app-category.utilities', 'desktop',
   );
-  final effectiveWebBaseHref = _resolveStrReq(
+  final String effectiveWebBaseHref = _resolveStrReq(
     args, iniVals, 'web-base-href', '/', 'web',
   );
-  final effectiveAppiconbg = _resolveStr(
+  final String? effectiveAppiconbg = _resolveStr(
     args, iniVals, 'appiconbg', null, 'desktop',
   );
-  final effectiveProjectDir = _resolveStr(
+  final String? effectiveProjectDir = _resolveStr(
     args, iniVals, 'project-dir', null, 'project',
   );
-  final effectiveJobs = _resolveStr(
+  final String? effectiveJobs = _resolveStr(
     args, iniVals, 'jobs', null, 'build',
   );
-  final effectiveJobsInt = effectiveJobs != null
+  final int? effectiveJobsInt = effectiveJobs != null
       ? int.tryParse(effectiveJobs)
       : null;
-  final effectiveAnalyze = _resolveOnOff(
+  final bool effectiveAnalyze = _resolveOnOff(
     args, iniVals, 'analyze', true, 'build',
   );
-  final effectiveIcon = _resolveOnOff(
+  final bool effectiveIcon = _resolveOnOff(
     args, iniVals, 'icon', true, 'build',
   );
-  final effectiveL10n = _resolveOnOff(
+  final bool effectiveL10n = _resolveOnOff(
     args, iniVals, 'l10n', true, 'build',
   );
-  final effectiveWebEmbedFonts = _resolveOnOff(
+  final bool effectiveWebEmbedFonts = _resolveOnOff(
     args, iniVals, 'web-embed-fonts', false, 'web',
   );
 
   if (args['test'] as bool) {
-    _logTest('=== Test Mode ===');
-    _logTest('Checking environment ...');
-    _logTest('');
+    _log('=== Test Mode ===');
+    _log('Checking environment ...');
+    _log('');
 
-    _logTest('Dart: ${Platform.version}');
-    _logTest('OS: ${Platform.operatingSystem}');
+    _log('Dart: ${Platform.version}');
+    _log('OS: ${Platform.operatingSystem}');
 
     try {
-      final result =
+      final ProcessResult result =
           await Process.run('flutter', ['--version'], runInShell: true);
       if (result.exitCode == 0) {
-        _logTest('Flutter: available');
-        _logTest('  ${(result.stdout as String).trim().split('\n').first}');
+        _log('Flutter: available');
+        _log('  ${(result.stdout as String).trim().split('\n').first}');
       } else {
-        _logTest('Flutter: NOT available');
+        _log('Flutter: NOT available');
         exit(1);
       }
     } on ProcessException {
-      _logTest('Flutter: NOT found in PATH');
+      _log('Flutter: NOT found in PATH');
       exit(1);
     }
 
-    _logTest('');
-    _logTest('Available platforms on this OS:');
-    for (final p in allPlatforms) {
-      final ok = isPlatformAvailable(p);
-      final mark = ok ? 'OK' : 'SKIP (not supported on this OS)';
-      _logTest('  $p: $mark');
+    _log('');
+    _log('Available platforms on this OS:');
+    for (final String p in allPlatforms) {
+      final bool ok = isPlatformAvailable(p);
+      final String mark = ok ? 'OK' : 'SKIP (not supported on this OS)';
+      _log('  $p: $mark');
     }
 
-    _logTest('');
-    _logTest('Dependencies:');
-    _logTest('  yaml: available (dart package)');
-    _logTest('  markdown: available (dart package)');
+    _log('');
+    _log('Dependencies:');
+    _log('  yaml: available (dart package)');
+    _log('  markdown: available (dart package)');
 
-    _logTest('');
+    _log('');
     try {
-      final (name, version) = getPubspecInfo(Directory.current.path);
-      _logTest('pubspec.yaml detected:');
-      _logTest('  name: $name');
-      _logTest('  version: ${version.isNotEmpty ? version : '(none)'}');
+      final (String name, String version) =
+          getPubspecInfo(Directory.current.path);
+      _log('pubspec.yaml detected:');
+      _log('  name: $name');
+      _log('  version: ${version.isNotEmpty ? version : '(none)'}');
     } on Exception catch (e) {
-      _logTest('pubspec.yaml: ${e.toString()}');
+      _log('pubspec.yaml: ${e.toString()}');
     }
 
-    _logTest('');
-    _logTest('Config file: ${effectiveConfigPath ?? '(none)'}');
-    _logTest('=== Test completed ===');
+    _log('');
+    _log('Config file: ${effectiveConfigPath ?? '(none)'}');
+    _log('=== Test completed ===');
   } else {
     try {
       await buildAll(
@@ -393,14 +394,11 @@ void main(List<String> arguments) async {
   }
 }
 
-/// 輸出一行帶時間戳的資訊日誌
-void _logInfo(String message) {
-  final ts = DateTime.now().toIso8601String().substring(11, 19);
-  print('[$ts][BUILD] $message');
-}
-
-/// 輸出一行帶時間戳的測試模式日誌
-void _logTest(String message) {
-  final ts = DateTime.now().toIso8601String().substring(11, 19);
+/// 輸出一行帶時間戳的日誌訊息
+void _log(String message) {
+  final String ts =
+      '${DateTime.now().hour.toString().padLeft(2, '0')}:'
+      '${DateTime.now().minute.toString().padLeft(2, '0')}:'
+      '${DateTime.now().second.toString().padLeft(2, '0')}';
   print('[$ts][BUILD] $message');
 }

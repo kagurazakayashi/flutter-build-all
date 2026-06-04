@@ -29,7 +29,7 @@ import 'web_fonts.dart';
 /// 訊號量（Semaphore），用於控制平行建置的最大並行數
 class _Semaphore {
   int _permits;
-  final List<Completer<void>> _waiters = [];
+  final List<Completer<void>> _waiters = <Completer<void>>[];
 
   _Semaphore(this._permits);
 
@@ -37,9 +37,9 @@ class _Semaphore {
   Future<void> acquire() {
     if (_permits > 0) {
       _permits--;
-      return Future.value();
+      return Future<void>.value();
     }
-    final c = Completer<void>();
+    final Completer<void> c = Completer<void>();
     _waiters.add(c);
     return c.future;
   }
@@ -79,33 +79,35 @@ Future<(String status, String error)> buildOnePlatform({
   String webBaseHref = '/',
   bool webEmbedFonts = false,
 }) async {
-  final ext = platformExtensions[platform] ?? '';
-  final outDirName =
-      appver.isNotEmpty ? '${name}_v${appver}_$platform' : '${name}_$platform';
-  final outDir = p.join(binDir, outDirName);
+  final String ext = platformExtensions[platform] ?? '';
+  final String outDirName = appver.isNotEmpty
+      ? '${name}_v${appver}_$platform'
+      : '${name}_$platform';
+  final String outDir = p.join(binDir, outDirName);
 
   // 建置命令
   List<String> cmd;
   switch (platform) {
     case 'web':
-      cmd = [
+      cmd = <String>[
         'flutter',
         'build',
         'web',
         '--base-href',
         webBaseHref,
+        '--no-tree-shake-icons',
       ];
     case 'android':
-      cmd = ['flutter', 'build', 'apk'];
+      cmd = <String>['flutter', 'build', 'apk'];
     case 'ios':
-      cmd = ['flutter', 'build', 'ios', '--no-codesign'];
+      cmd = <String>['flutter', 'build', 'ios', '--no-codesign'];
     default:
-      cmd = ['flutter', 'build', platform];
+      cmd = <String>['flutter', 'build', platform];
   }
 
   logMessageInline('Building $platform ... ');
 
-  final result = await Process.run(
+  final ProcessResult result = await Process.run(
     cmd.first,
     cmd.skip(1).toList(),
     workingDirectory: projectDir,
@@ -113,17 +115,17 @@ Future<(String status, String error)> buildOnePlatform({
   );
 
   if (result.exitCode != 0) {
-    final err = (result.stderr as String).trim();
-    final out = (result.stdout as String).trim();
+    final String err = (result.stderr as String).trim();
+    final String out = (result.stdout as String).trim();
     return ('FAILED', err.isNotEmpty ? err : out);
   }
 
   // 複製建置產物
   Directory(outDir).createSync(recursive: true);
-  final buildSrc = platformBuildDirs[platform];
+  final String? buildSrc = platformBuildDirs[platform];
   if (buildSrc != null) {
-    final buildSrcAbs = p.join(projectDir, buildSrc);
-    final buildSrcDir = Directory(buildSrcAbs);
+    final String buildSrcAbs = p.join(projectDir, buildSrc);
+    final Directory buildSrcDir = Directory(buildSrcAbs);
     if (buildSrcDir.existsSync()) {
       copyDirectory(buildSrcAbs, outDir);
     }
@@ -140,7 +142,7 @@ Future<(String status, String error)> buildOnePlatform({
   }
 
   // 平台特定後處理
-  final fullAppicon = p.join(projectDir, appicon);
+  final String fullAppicon = p.join(projectDir, appicon);
   switch (platform) {
     case 'linux':
       handleLinuxDesktop(
@@ -158,7 +160,6 @@ Future<(String status, String error)> buildOnePlatform({
         name: name,
         ext: ext,
         appdesc: appdesc,
-        appgeneric: appgeneric,
         projectDir: projectDir,
       );
     case 'macos':
@@ -207,12 +208,16 @@ Future<void> buildAll({
   bool webEmbedFonts = false,
 }) async {
   // 自動規範化 webBaseHref：確保以 / 開頭與結尾
-  var normalizedWebBaseHref = webBaseHref.isEmpty ? '/' : webBaseHref;
-  if (!normalizedWebBaseHref.startsWith('/')) normalizedWebBaseHref = '/$normalizedWebBaseHref';
-  if (!normalizedWebBaseHref.endsWith('/')) normalizedWebBaseHref = '$normalizedWebBaseHref/';
+  String normalizedWebBaseHref = webBaseHref.isEmpty ? '/' : webBaseHref;
+  if (!normalizedWebBaseHref.startsWith('/')) {
+    normalizedWebBaseHref = '/$normalizedWebBaseHref';
+  }
+  if (!normalizedWebBaseHref.endsWith('/')) {
+    normalizedWebBaseHref = '$normalizedWebBaseHref/';
+  }
 
   // 確認並切換至專案目錄
-  final effectiveProjectDir = projectDir != null
+  final String effectiveProjectDir = projectDir != null
       ? Directory(projectDir).absolute.path
       : Directory.current.path;
   if (!Directory(effectiveProjectDir).existsSync()) {
@@ -221,7 +226,8 @@ Future<void> buildAll({
   logMessage('Project directory: $effectiveProjectDir');
 
   // 讀取 pubspec.yaml
-  final (name, detectedVersion) = getPubspecInfo(effectiveProjectDir);
+  final (String name, String detectedVersion) =
+      getPubspecInfo(effectiveProjectDir);
   if (name.isEmpty) {
     throw Exception(
       "Cannot find 'name' in pubspec.yaml. This directory is not a Flutter project.",
@@ -230,8 +236,8 @@ Future<void> buildAll({
   logMessage('pubspec.yaml found, this is a Flutter project.');
   logMessage('');
 
-  final effectiveName = nameOverride ?? name;
-  final effectiveVersion = appver ?? detectedVersion;
+  final String effectiveName = nameOverride ?? name;
+  final String effectiveVersion = appver ?? detectedVersion;
   if (effectiveVersion.isNotEmpty) {
     logMessage('Version from pubspec.yaml: $effectiveVersion');
   }
@@ -252,17 +258,19 @@ Future<void> buildAll({
   }
 
   // 取得可用平台
-  var platforms = getAvailablePlatforms();
+  List<String> platforms = getAvailablePlatforms();
   if (targetFilter != null && targetFilter.isNotEmpty) {
     platforms = filterPlatforms(platforms, targetFilter);
   }
 
   // 通知使用者不可用的平台
-  final unavailable = (targetFilter != null
-          ? targetFilter.split(',').map((t) => t.trim().toLowerCase())
+  final Iterable<String> unavailable = (targetFilter != null
+          ? targetFilter
+              .split(',')
+              .map((String t) => t.trim().toLowerCase())
           : allPlatforms)
-      .where((p) => allPlatforms.contains(p) && !isPlatformAvailable(p));
-  for (final p in unavailable) {
+      .where((String p) => allPlatforms.contains(p) && !isPlatformAvailable(p));
+  for (final String p in unavailable) {
     logMessage(
         "Note: platform '$p' cannot be built on this OS (${Platform.operatingSystem}), skipped.");
   }
@@ -285,11 +293,11 @@ Future<void> buildAll({
   }
 
   // 準備資源檔案
-  final assets = findAssetFiles(effectiveProjectDir);
+  final Map<String, String> assets = findAssetFiles(effectiveProjectDir);
 
-  final textCache = <String, String>{};
-  for (final srcName in assets.values) {
-    final content =
+  final Map<String, String> textCache = <String, String>{};
+  for (final String srcName in assets.values) {
+    final String content =
         File(p.join(effectiveProjectDir, srcName)).readAsStringSync();
     textCache[srcName] =
         srcName.endsWith('.md') ? convertMarkdown(content) : content;
@@ -297,14 +305,14 @@ Future<void> buildAll({
 
   if (assets.isNotEmpty) {
     logMessage('Asset files to include in each output:');
-    for (final outName in assets.keys.toList()..sort()) {
+    for (final String outName in assets.keys.toList()..sort()) {
       logMessage('  $outName');
     }
     logMessage('');
   }
 
   // 清除舊的 bin/ 目錄
-  final binDir = p.join(effectiveProjectDir, 'bin');
+  final String binDir = p.join(effectiveProjectDir, 'bin');
   if (Directory(binDir).existsSync()) {
     Directory(binDir).deleteSync(recursive: true);
     logMessage('Removed old bin directory.');
@@ -316,22 +324,23 @@ Future<void> buildAll({
 
   if (jobs != null) {
     // ---- 平行建置 ----
-    final maxWorkers = jobs == 0 ? Platform.numberOfProcessors : jobs;
+    final int maxWorkers = jobs == 0 ? Platform.numberOfProcessors : jobs;
     logMessage('Building with $maxWorkers parallel workers');
     logMessage('');
 
-    final semaphore = _Semaphore(maxWorkers);
-    final lock = _Semaphore(1);
-    final errors = <String>[];
+    final _Semaphore semaphore = _Semaphore(maxWorkers);
+    final _Semaphore lock = _Semaphore(1);
+    final List<String> errors = <String>[];
 
-    final futures = platforms.map((platform) async {
+    final Iterable<Future<void>> futures = platforms.map(
+        (String platform) async {
       await semaphore.acquire();
       try {
-        final label = effectiveVersion.isNotEmpty
+        final String label = effectiveVersion.isNotEmpty
             ? '${effectiveName}_v${effectiveVersion}_$platform'
             : '${effectiveName}_$platform';
 
-        final (status, error) = await buildOnePlatform(
+        final (String status, String error) = await buildOnePlatform(
           platform: platform,
           name: effectiveName,
           appver: effectiveVersion,
@@ -353,8 +362,9 @@ Future<void> buildAll({
         try {
           logMessage('Building $label ... $status');
           if (error.isNotEmpty) {
-            final shortErr =
-                error.length > 500 ? '${error.substring(0, 500)}...' : error;
+            final String shortErr = error.length > 500
+                ? '${error.substring(0, 500)}...'
+                : error;
             logMessage('  $shortErr');
             errors.add('$platform: $error');
           }
@@ -374,12 +384,12 @@ Future<void> buildAll({
     await Future.wait(futures);
   } else {
     // ---- 序列建置 ----
-    for (final platform in platforms) {
-      final label = effectiveVersion.isNotEmpty
+    for (final String platform in platforms) {
+      final String label = effectiveVersion.isNotEmpty
           ? '${effectiveName}_v${effectiveVersion}_$platform'
           : '${effectiveName}_$platform';
       logMessageInline('Building $label ... ');
-      final (status, error) = await buildOnePlatform(
+      final (String status, String error) = await buildOnePlatform(
         platform: platform,
         name: effectiveName,
         appver: effectiveVersion,
@@ -398,8 +408,9 @@ Future<void> buildAll({
       );
       logMessage(status);
       if (error.isNotEmpty) {
-        logMessage(
-            '  ${error.length > 500 ? '${error.substring(0, 500)}...' : error}');
+        final String shortErr =
+            error.length > 500 ? '${error.substring(0, 500)}...' : error;
+        logMessage('  $shortErr');
       }
       if (status == 'FAILED') {
         failed++;

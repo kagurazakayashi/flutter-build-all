@@ -35,7 +35,7 @@
 | `--icon` / `-i` | 生成图标（on/off） | on |
 | `--l10n` / `-l` | 生成本地化文件（on/off） | on |
 | `--analyze` / `-A` | 构建前分析（on/off） | on |
-| `--web-embed-fonts` / `-f` | 内嵌 Web 回退字体（on/off） | off |
+| `--web-embed-fonts` / `-w` | 内嵌 Web 回退字体（on/off） | off |
 | `--web-base-href` / `-b` | Web 构建 base href | `/` |
 | `--project-dir` / `-r` | Flutter 项目根目录 | 当前目录 |
 | `--test` / `-t` | 仅测试环境，不构建 | — |

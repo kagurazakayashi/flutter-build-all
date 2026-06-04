@@ -2,28 +2,33 @@
 library;
 
 import 'dart:async' show Future;
-import 'dart:io' show Directory, File, HttpClient, Process;
+import 'dart:io'
+    show Directory, File, FileSystemEntity, HttpClient, HttpClientRequest,
+        HttpClientResponse, Platform, Process, ProcessResult;
 
 import 'package:path/path.dart' as p;
 
 import 'log.dart';
 
 /// Google Fonts CDN 基礎 URL
-const fontsCdnBase = 'https://fonts.gstatic.com/s/';
+const String fontsCdnBase = 'https://fonts.gstatic.com/s/';
 
 /// 專案中註冊的字體（不在 font_fallback_data.dart 中但 CanvasKit 仍會請求）
-const projectFonts = <String>[
+const List<String> projectFonts = <String>[
   'roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2',
 ];
 
-/// 透過 `where flutter` 尋找 Flutter SDK 根目錄
+/// 透過系統命令尋找 Flutter SDK 根目錄
 String? findFlutterSdk() {
-  final result = Process.runSync('where', ['flutter'], runInShell: true);
+  final String cmdName = Platform.isWindows ? 'where' : 'which';
+  final ProcessResult result =
+      Process.runSync(cmdName, ['flutter'], runInShell: true);
   if (result.exitCode != 0) return null;
-  for (final line in (result.stdout as String).trim().split('\n')) {
-    final linePath = line.trim();
+  for (final String line
+      in (result.stdout as String).trim().split('\n')) {
+    final String linePath = line.trim();
     if (linePath.endsWith('flutter.bat') || linePath.endsWith('flutter')) {
-      final root = Directory(linePath).parent.parent.path;
+      final String root = Directory(linePath).parent.parent.path;
       if (File(p.join(root, 'bin', 'flutter.bat')).existsSync()) {
         return root;
       }
@@ -34,25 +39,25 @@ String? findFlutterSdk() {
 
 /// 從 font_fallback_data.dart 擷取 .woff2 路徑（去重）
 List<String> parseFontUrls(String fallbackPath) {
-  final content = File(fallbackPath).readAsStringSync();
-  final regex = RegExp(r"'([a-z][^']*\.woff2)'");
-  final seen = <String>{};
+  final String content = File(fallbackPath).readAsStringSync();
+  final RegExp regex = RegExp(r"'([a-z][^']*\.woff2)'");
+  final Set<String> seen = <String>{};
   return regex
       .allMatches(content)
-      .map((m) => m.group(1)!)
-      .where((url) => seen.add(url))
+      .map((RegExpMatch m) => m.group(1)!)
+      .where((String url) => seen.add(url))
       .toList();
 }
 
 /// 下載 fallback 字型至快取目錄（跳過已存在檔案）
 Future<void> downloadWebFonts(String projectDir) async {
-  final flutterRoot = findFlutterSdk();
+  final String? flutterRoot = findFlutterSdk();
   if (flutterRoot == null) {
     logMessage('Warning: Cannot detect Flutter SDK, skipping font download.');
     return;
   }
 
-  final fallbackPath = p.join(
+  final String fallbackPath = p.join(
     flutterRoot,
     'bin',
     'cache',
@@ -68,66 +73,70 @@ Future<void> downloadWebFonts(String projectDir) async {
   }
   logMessage('  Source: $fallbackPath');
 
-  final urls = {...parseFontUrls(fallbackPath), ...projectFonts}.toList();
+  final List<String> urls =
+      {...parseFontUrls(fallbackPath), ...projectFonts}.toList();
   logMessage('  Found ${urls.length} font entries.');
 
-  final cacheDir = p.join(projectDir, 'web_fonts_cache');
+  final String cacheDir = p.join(projectDir, 'web_fonts_cache');
   Directory(cacheDir).createSync(recursive: true);
 
-  var downloaded = 0;
-  var skipped = 0;
-  var errors = 0;
-  final client = HttpClient();
+  int downloaded = 0;
+  int skipped = 0;
+  int errors = 0;
+  final HttpClient client = HttpClient();
 
-  for (var i = 0; i < urls.length; i++) {
-    final url = urls[i];
-    final localPath = p.join(cacheDir, url);
-    final localFile = File(localPath);
+  try {
+    for (int i = 0; i < urls.length; i++) {
+      final String url = urls[i];
+      final String localPath = p.join(cacheDir, url);
+      final File localFile = File(localPath);
 
-    if (localFile.existsSync()) {
-      skipped++;
-      continue;
-    }
-
-    Directory(localFile.parent.path).createSync(recursive: true);
-    final fullUrl = Uri.parse('$fontsCdnBase$url');
-
-    try {
-      final request = await client.getUrl(fullUrl);
-      final response = await request.close();
-      if (response.statusCode == 200) {
-        await localFile.openWrite().addStream(response);
-        downloaded++;
-      } else {
-        errors++;
-        logMessage('  FAILED: HTTP ${response.statusCode} for $url');
+      if (localFile.existsSync()) {
+        skipped++;
+        continue;
       }
-    } on Exception catch (e) {
-      errors++;
-      logMessage('  FAILED: $e for $url');
+
+      Directory(localFile.parent.path).createSync(recursive: true);
+      final Uri fullUrl = Uri.parse('$fontsCdnBase$url');
+
+      try {
+        final HttpClientRequest request = await client.getUrl(fullUrl);
+        final HttpClientResponse response = await request.close();
+        if (response.statusCode == 200) {
+          await localFile.openWrite().addStream(response);
+          downloaded++;
+        } else {
+          errors++;
+          logMessage('  FAILED: HTTP ${response.statusCode} for $url');
+        }
+      } on Exception catch (e) {
+        errors++;
+        logMessage('  FAILED: $e for $url');
+      }
     }
+  } finally {
+    client.close();
   }
 
-  client.close();
   logMessage(
       '  Font download complete: $downloaded downloaded, $skipped skipped, $errors errors.');
 }
 
 /// 將快取字型複製到 web 建置輸出目錄
 void copyWebFontsToBuild(String projectDir, String webOutputDir) {
-  final cacheDir = Directory(p.join(projectDir, 'web_fonts_cache'));
+  final Directory cacheDir = Directory(p.join(projectDir, 'web_fonts_cache'));
   if (!cacheDir.existsSync()) return;
 
-  final fontsBuildDir = p.join(webOutputDir, 'fonts');
+  final String fontsBuildDir = p.join(webOutputDir, 'fonts');
   Directory(fontsBuildDir).createSync(recursive: true);
 
-  var copied = 0;
-  var skipped = 0;
+  int copied = 0;
+  int skipped = 0;
 
-  for (final entity in cacheDir.listSync(recursive: true)) {
+  for (final FileSystemEntity entity in cacheDir.listSync(recursive: true)) {
     if (entity is! File) continue;
-    final relPath = p.relative(entity.path, from: cacheDir.path);
-    final target = p.join(fontsBuildDir, relPath);
+    final String relPath = p.relative(entity.path, from: cacheDir.path);
+    final String target = p.join(fontsBuildDir, relPath);
     if (File(target).existsSync()) {
       skipped++;
       continue;
