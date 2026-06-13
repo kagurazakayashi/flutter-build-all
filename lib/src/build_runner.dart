@@ -105,7 +105,7 @@ Future<(String status, String error)> buildOnePlatform({
       cmd = <String>['flutter', 'build', platform];
   }
 
-  logMessageInline('Building $platform ... ');
+  logMessage('Building $platform ...');
 
   final ProcessResult result = await Process.run(
     cmd.first,
@@ -388,7 +388,6 @@ Future<void> buildAll({
       final String label = effectiveVersion.isNotEmpty
           ? '${effectiveName}_v${effectiveVersion}_$platform'
           : '${effectiveName}_$platform';
-      logMessageInline('Building $label ... ');
       final (String status, String error) = await buildOnePlatform(
         platform: platform,
         name: effectiveName,
@@ -406,7 +405,7 @@ Future<void> buildAll({
         webBaseHref: normalizedWebBaseHref,
         webEmbedFonts: webEmbedFonts,
       );
-      logMessage(status);
+      logMessage('Building $label ... $status');
       if (error.isNotEmpty) {
         final String shortErr =
             error.length > 500 ? '${error.substring(0, 500)}...' : error;
