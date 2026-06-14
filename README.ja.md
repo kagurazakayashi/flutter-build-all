@@ -131,6 +131,7 @@ dart flutter-build-all/bin/build_all.dart \
 | `--l10n` | `-l` | on/off | `on` | `flutter gen-l10n` を実行 |
 | `--web-embed-fonts` | `-w` | on/off | `off` | Flutter フォールバックフォントをダウンロードして Web 出力に埋め込む |
 | `--web-base-href` | `-b` | 文字列 | `/` | Web ビルドの base href |
+| `--proxy` | `-x` | 文字列 | 環境変数自動 | フォントダウンロード用プロキシ（http:// または socks5:// 形式） |
 | `--appdesc` | `-d` | 文字列 | 空 | アプリ説明 |
 | `--appgeneric` | `-g` | 文字列 | 空 | 一般名 |
 | `--appcategory` | `-c` | 文字列 | `Utility` | Linux デスクトップカテゴリ |
@@ -174,6 +175,8 @@ jobs = 0
 web-embed-fonts = off
 ; Web ビルドの base href（例 "/"、"/myapp/"）
 web-base-href = /
+; フォントダウンロード用プロキシ（http:// または socks5:// 形式）
+; proxy = socks5://192.168.1.45:23334
 
 [desktop]
 ; Linux デスクトップエントリのカテゴリ、セミコロン区切り

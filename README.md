@@ -131,6 +131,7 @@ dart flutter-build-all/bin/build_all.dart \
 | `--l10n` | `-l` | on/off | `on` | Run `flutter gen-l10n` |
 | `--web-embed-fonts` | `-w` | on/off | `off` | Download & embed Flutter fallback fonts into web output |
 | `--web-base-href` | `-b` | string | `/` | Base href for web build |
+| `--proxy` | `-x` | string | env vars auto | Proxy for font downloads (http:// or socks5:// format) |
 | `--appdesc` | `-d` | string | empty | Application description |
 | `--appgeneric` | `-g` | string | empty | Generic app name |
 | `--appcategory` | `-c` | string | `Utility` | Linux desktop categories, semicolon-separated |
@@ -176,6 +177,8 @@ jobs = 0
 web-embed-fonts = off
 ; Base href for web build (e.g. "/", "/myapp/")
 web-base-href = /
+; Proxy for font downloads (http:// or socks5:// format)
+; proxy = socks5://192.168.1.45:23334
 
 [desktop]
 ; Linux desktop entry categories, semicolon-separated

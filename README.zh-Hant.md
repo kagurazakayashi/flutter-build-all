@@ -131,6 +131,7 @@ dart flutter-build-all/bin/build_all.dart \
 | `--l10n` | `-l` | on/off | `on` | 執行 `flutter gen-l10n` |
 | `--web-embed-fonts` | `-w` | on/off | `off` | 下載 Flutter fallback 字型並內嵌到 Web 產物 |
 | `--web-base-href` | `-b` | 字串 | `/` | Web 建置 base href |
+| `--proxy` | `-x` | 字串 | 環境變數自動 | 字型下載代理（支援 http:// 與 socks5:// 格式） |
 | `--appdesc` | `-d` | 字串 | 空 | 應用描述 |
 | `--appgeneric` | `-g` | 字串 | 空 | 通用名稱 |
 | `--appcategory` | `-c` | 字串 | `Utility` | Linux 桌面分類 |
@@ -174,6 +175,8 @@ jobs = 0
 web-embed-fonts = off
 ; Web 建置的 base href（如 "/"、"/myapp/"）
 web-base-href = /
+; 字型下載代理（支援 http:// 與 socks5:// 格式）
+; proxy = socks5://192.168.1.45:23334
 
 [desktop]
 ; Linux 桌面條目分類，分號分隔

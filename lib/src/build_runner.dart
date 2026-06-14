@@ -206,6 +206,7 @@ Future<void> buildAll({
   bool icon = true,
   bool l10n = true,
   bool webEmbedFonts = false,
+  String? webFontProxy,
 }) async {
   // 自動規範化 webBaseHref：確保以 / 開頭與結尾
   String normalizedWebBaseHref = webBaseHref.isEmpty ? '/' : webBaseHref;
@@ -288,7 +289,7 @@ Future<void> buildAll({
 
   // Web 內嵌字型：預先下載至快取目錄
   if (webEmbedFonts && platforms.contains('web')) {
-    await downloadWebFonts(effectiveProjectDir);
+    await downloadWebFonts(effectiveProjectDir, proxy: webFontProxy);
     logMessage('');
   }
 

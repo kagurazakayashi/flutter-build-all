@@ -235,6 +235,12 @@ void main(List<String> arguments) async {
         'on': 'Download fonts and embed into web output',
         'off': 'Do not embed fonts',
       },
+    )
+    ..addOption(
+      'proxy',
+      abbr: 'x',
+      help: 'Proxy server for font downloads (e.g. http://127.0.0.1:1080).'
+          ' Also reads HTTPS_PROXY / HTTP_PROXY / ALL_PROXY env vars.',
     );
 
   late ArgResults args;
@@ -315,6 +321,9 @@ void main(List<String> arguments) async {
   final bool effectiveWebEmbedFonts = _resolveOnOff(
     args, iniVals, 'web-embed-fonts', false, 'web',
   );
+  final String? effectiveProxy = _resolveStr(
+    args, iniVals, 'proxy', null, 'web',
+  );
 
   if (args['test'] as bool) {
     _log('=== Test Mode ===');
@@ -386,6 +395,7 @@ void main(List<String> arguments) async {
         icon: effectiveIcon,
         l10n: effectiveL10n,
         webEmbedFonts: effectiveWebEmbedFonts,
+        webFontProxy: effectiveProxy,
       );
     } on Exception catch (e) {
       stderr.writeln('Error: ${e.toString()}');
